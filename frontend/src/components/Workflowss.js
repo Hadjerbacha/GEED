@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
 import Select from 'react-select';
 import Navbar from './Navbar';
+import Chatbot from './chatbot';
+
 const Workflowss = () => {
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -174,7 +176,7 @@ const Workflowss = () => {
       <Navbar />
       <br/><br/>
       <h2 className="mb-4">Gestion des Workflows</h2>
-
+      <Chatbot /> 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <Button onClick={() => openModal(null)}>Nouvelle Tâche</Button>
         <Form.Control

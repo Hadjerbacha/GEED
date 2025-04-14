@@ -101,24 +101,8 @@ const Document = () => {
 
   return (
     <div className="container">
-      <nav className="the-navbar">
-        <div className="logo-container">
-          <img alt="Logo" className="logo" />
-        </div>
-        <div className="nav-buttons">
-          <button className="nav-button">Statistiques</button>
-          <button className="nav-button">Workflows</button>
-          <button className="nav-button">À propos</button>
-        </div>
-      </nav>
 
       <div className="content">
-        <nav className="navbar">
-          <div className="nav-right">
-            <button className="nav">Accueil</button>
-            <button className="nav">Déconnexion</button>
-          </div>
-        </nav>
 
         <h1>Gestion des Documents</h1>
 
