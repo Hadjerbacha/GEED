@@ -47,60 +47,6 @@ async function initialize() {
 }
 initialize();
 
-// ➕ Ajouter une tâche
-router.post('/', upload.single('file'), async (req, res) => {
-  const { title, description, due_date, priority, notify } = req.body;
-  const file_path = req.file ? `/uploads/${req.file.filename}` : null;
-  try {
-    const result = await pool.query(
-      `INSERT INTO tasks 
-        (title, description, due_date, priority, file_path, notify) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [title, description, due_date, priority, file_path, notify === 'true']
-    );
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    if (req.file) fs.unlink(req.file.path, () => {});
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 🔁 Assigner une tâche
-router.post('/assign-task', upload.single('file'), async (req, res) => {
-  const { note, notify, assigned_to } = req.body;
-  let userIds;
-  try {
-    userIds = JSON.parse(assigned_to);
-    if (!Array.isArray(userIds)) throw new Error();
-  } catch {
-    return res.status(400).json({ error: 'assigned_to doit être un tableau JSON.' });
-  }
-  const file_path = req.file ? `/uploads/${req.file.filename}` : null;
-  try {
-    const result = await pool.query(
-      `INSERT INTO tasks 
-        (title, description, due_date, priority, file_path, notify, assigned_to, assignment_note, assigned_at, status)
-       VALUES 
-        ('Tâche assignée', $1, NOW()::date + INTERVAL '7 days', 'Normale', $2, $3, $4, $1, NOW(), 'assigned')
-       RETURNING *`,
-      [note, file_path, notify === 'true', userIds]
-    );
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    if (req.file) fs.unlink(req.file.path, () => {});
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 📥 Récupérer toutes les tâches
-router.get('/', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM tasks ORDER BY created_at DESC');
-    res.status(200).json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
   const winston = require('winston');
 
@@ -113,72 +59,82 @@ const logger = winston.createLogger({
   ],
 });
 
-// ➕ Ajouter une tâche
 router.post('/', upload.single('file'), async (req, res) => {
-  const { title, description, due_date, priority, notify } = req.body;
-  const file_path = req.file ? `/uploads/${req.file.filename}` : null;
-  try {
-    const result = await pool.query(
-      `INSERT INTO tasks 
-        (title, description, due_date, priority, file_path, notify) 
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [title, description, due_date, priority, file_path, notify === 'true']
-    );
-    logger.info(`Task created: ${title}`);
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    logger.error(`Error creating task: ${err.message}`);
-    if (req.file) fs.unlink(req.file.path, () => {});
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 🔁 Assigner une tâche
-router.post('/assign-task', upload.single('file'), async (req, res) => {
-  const { note, notify, assigned_to } = req.body;
-  let userIds;
-  try {
-    userIds = JSON.parse(assigned_to);
-    if (!Array.isArray(userIds)) throw new Error();
-  } catch {
-    logger.error(`Invalid assigned_to: ${assigned_to}`);
-    return res.status(400).json({ error: 'assigned_to doit être un tableau JSON.' });
-  }
-  const file_path = req.file ? `/uploads/${req.file.filename}` : null;
-  try {
-    const result = await pool.query(
-      `INSERT INTO tasks 
-        (title, description, due_date, priority, file_path, notify, assigned_to, assignment_note, assigned_at, status)
-       VALUES 
-        ('Tâche assignée', $1, NOW()::date + INTERVAL '7 days', 'Normale', $2, $3, $4, $1, NOW(), 'assigned')
-       RETURNING *`,
-      [note, file_path, notify === 'true', userIds]
-    );
-    logger.info(`Task assigned: ${note}`);
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    logger.error(`Error assigning task: ${err.message}`);
-    if (req.file) fs.unlink(req.file.path, () => {});
-    res.status(500).json({ error: err.message });
-  }
-});
+    const { title, description, due_date, priority, notify, assigned_to } = req.body;
+    const file_path = req.file ? `/uploads/${req.file.filename}` : null;
+  
+    let userIds;
+    try {
+      userIds = JSON.parse(assigned_to);
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return res.status(400).json({ error: 'assigned_to doit être un tableau JSON non vide.' });
+      }
+      userIds = userIds.map(Number); // Convertir les IDs en entiers
+      console.log('assigned_to après conversion:', userIds); // Vérifie la conversion ici
+    } catch (err) {
+      return res.status(400).json({ error: 'assigned_to doit être un tableau JSON valide.' });
+    }
+  
+    try {
+      // Vérification de la structure de `userIds`
+      if (!userIds.every(id => Number.isInteger(id))) {
+        return res.status(400).json({ error: 'Tous les IDs dans assigned_to doivent être des entiers.' });
+      }
+  
+      // Insertion dans la base de données
+      const result = await pool.query(
+        `INSERT INTO tasks 
+          (title, description, due_date, priority, file_path, notify, assigned_to) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [title, description, due_date, priority, file_path, notify === 'true', userIds]
+      );
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      console.error('Error during task insertion:', err);
+      if (req.file) fs.unlink(req.file.path, () => {});
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
 
 // 📥 Récupérer toutes les tâches
 router.get('/', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM tasks ORDER BY created_at DESC');
-    logger.info(`Tasks retrieved`);
-    res.status(200).json(result.rows);
-  } catch (err) {
-    logger.error(`Error retrieving tasks: ${err.message}`);
-    res.status(500).json({ error: err.message });
-  }
-});
+    try {
+      const tasksResult = await pool.query('SELECT * FROM tasks ORDER BY id DESC');
+      const tasks = tasksResult.rows;
+  
+      // Récupérer tous les IDs utilisateurs uniques
+      const allAssignedIds = [...new Set(tasks.flatMap(task => task.assigned_to || []))];
+  
+      if (allAssignedIds.length === 0) {
+        return res.json(tasks);
+      }
+  
+      // Récupérer les noms depuis la table users
+      const usersResult = await pool.query(
+        `SELECT id, name, prenom FROM users WHERE id = ANY($1)`,
+        [allAssignedIds]
+      );
+      const usersMap = Object.fromEntries(usersResult.rows.map(u => [u.id, `${u.name} ${u.prenom}`]));
+  
+      // Remplacer les IDs dans assigned_to par les noms
+      const enrichedTasks = tasks.map(task => ({
+        ...task,
+        assigned_names: (task.assigned_to || []).map(id => usersMap[id] || `ID ${id}`)
+      }));
+  
+      res.json(enrichedTasks);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+  
 
 // ✏️ Modifier une tâche
+/// ✏️ Modifier une tâche (et gérer assigned_to en optionnel)
 router.put('/:id', upload.single('file'), async (req, res) => {
     const taskId = parseInt(req.params.id, 10);
-    const { title, description, due_date, priority, notify } = req.body;
+    const { title, description, due_date, priority, notify, assigned_to } = req.body;
     let file_path = null;
   
     try {
@@ -190,7 +146,7 @@ router.put('/:id', upload.single('file'), async (req, res) => {
       }
       const oldTask = oldTaskResult.rows[0];
   
-      // Gestion du fichier : nouveau fichier = suppression de l’ancien
+      // Gestion du fichier
       if (req.file) {
         file_path = `/uploads/${req.file.filename}`;
         if (oldTask.file_path) {
@@ -198,15 +154,32 @@ router.put('/:id', upload.single('file'), async (req, res) => {
           if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
         }
       } else {
-        file_path = oldTask.file_path; // on conserve l’ancien si pas de nouveau fichier
+        file_path = oldTask.file_path; // On conserve l’ancien si pas de nouveau fichier
+      }
+  
+      // Traitement des utilisateurs assignés
+      let userIds = oldTask.assigned_to; // Garder les anciens par défaut
+      if (assigned_to !== undefined) {
+        try {
+          const parsed = JSON.parse(assigned_to);
+          if (!Array.isArray(parsed) || parsed.length === 0) {
+            return res.status(400).json({ error: 'assigned_to doit être un tableau JSON non vide.' });
+          }
+          userIds = parsed.map(Number);
+          if (!userIds.every(id => Number.isInteger(id))) {
+            return res.status(400).json({ error: 'Tous les IDs dans assigned_to doivent être des entiers.' });
+          }
+        } catch (err) {
+          return res.status(400).json({ error: 'assigned_to doit être un tableau JSON valide.' });
+        }
       }
   
       // Mise à jour dans la base
       const result = await pool.query(
         `UPDATE tasks 
-         SET title = $1, description = $2, due_date = $3, priority = $4, file_path = $5, notify = $6
-         WHERE id = $7 RETURNING *`,
-        [title, description, due_date, priority, file_path, notify === 'true', taskId]
+         SET title = $1, description = $2, due_date = $3, priority = $4, file_path = $5, notify = $6, assigned_to = $7
+         WHERE id = $8 RETURNING *`,
+        [title, description, due_date, priority, file_path, notify === 'true', userIds, taskId]
       );
   
       logger.info(`Task updated: ${taskId}`);
@@ -217,7 +190,8 @@ router.put('/:id', upload.single('file'), async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
-
+  
+  
   
 router.delete('/:id', async (req, res) => {
   const taskId = parseInt(req.params.id, 10);
