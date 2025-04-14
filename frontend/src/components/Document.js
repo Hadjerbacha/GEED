@@ -146,6 +146,7 @@ const Document = () => {
             <tr>
               <th>Document</th>
               <th>Date</th>
+              <th>category</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -154,6 +155,7 @@ const Document = () => {
               <tr key={doc.id}>
                 <td>{doc.name}</td>
                 <td>{new Date(doc.date).toLocaleString()}</td>
+                <td>{doc.category}</td>
                 <td className="actions">
                   <button className="button" onClick={() => consultDocument(doc.file_path)}>Consulter</button>
                   <button className="button-sup" onClick={() => handleDelete(doc.id)}>Supprimer</button>
