@@ -70,13 +70,12 @@ router.post('/', upload.single('file'), async (req, res) => {
         return res.status(400).json({ error: 'assigned_to doit être un tableau JSON non vide.' });
       }
       userIds = userIds.map(Number); // Convertir les IDs en entiers
-      console.log('assigned_to après conversion:', userIds); // Vérifie la conversion ici
+      console.log('assigned_to après conversion:', userIds);
     } catch (err) {
       return res.status(400).json({ error: 'assigned_to doit être un tableau JSON valide.' });
     }
   
     try {
-      // Vérification de la structure de `userIds`
       if (!userIds.every(id => Number.isInteger(id))) {
         return res.status(400).json({ error: 'Tous les IDs dans assigned_to doivent être des entiers.' });
       }
@@ -88,7 +87,16 @@ router.post('/', upload.single('file'), async (req, res) => {
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
         [title, description, due_date, priority, file_path, notify === 'true', userIds]
       );
-      res.status(201).json(result.rows[0]);
+  
+      const task = result.rows[0];
+  
+      // Envoi de notification après insertion si besoin
+      if (notify === 'true') {
+        const creator = req.user;
+        await sendNotification(userIds, task, `${creator.name} ${creator.prenom}`);
+      }
+  
+      res.status(201).json(task);
     } catch (err) {
       console.error('Error during task insertion:', err);
       if (req.file) fs.unlink(req.file.path, () => {});
@@ -96,7 +104,6 @@ router.post('/', upload.single('file'), async (req, res) => {
     }
   });
   
-
 // 📥 Récupérer toutes les tâches
 router.get('/', async (req, res) => {
     try {

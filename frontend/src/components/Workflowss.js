@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
 import Select from 'react-select';
-
+import Navbar from './Navbar';
 const Workflowss = () => {
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
@@ -171,6 +171,8 @@ const Workflowss = () => {
   
   return (
     <div className="container-fluid mt-4">
+      <Navbar />
+      <br/><br/>
       <h2 className="mb-4">Gestion des Workflows</h2>
 
       <div className="d-flex justify-content-between align-items-center mb-3">
