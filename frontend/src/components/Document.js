@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './DocumentManagementPage.css';
 import axios from 'axios';
-import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
-import Select from 'react-select';
-import Navbar from './Navbar';
 
 const Document = () => {
   const [documents, setDocuments] = useState([]);
@@ -15,7 +12,7 @@ const Document = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  const [advancedDetails, setAdvancedDetails] = useState('');
+  const [useAdvancedFilter, setUseAdvancedFilter] = useState(false);
 
   const token = localStorage.getItem('token');
 
@@ -42,6 +39,11 @@ const Document = () => {
       return;
     }
 
+    if (pendingFile.size > 10 * 1024 * 1024) {
+      setErrorMessage("Le fichier dépasse la limite de 10 Mo.");
+      return;
+    }
+
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
@@ -51,7 +53,6 @@ const Document = () => {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`
-          // Pas de Content-Type ici, fetch le gère avec FormData
         },
         body: formData,
       });
@@ -59,11 +60,7 @@ const Document = () => {
       if (!res.ok) {
         throw new Error(`Erreur : ${res.status}`);
       }
-      if (pendingFile.size > 10 * 1024 * 1024) {
-        setErrorMessage("Le fichier dépasse la limite de 10 Mo.");
-        return;
-      }
-      
+
       const newDoc = await res.json();
       setDocuments([newDoc, ...documents]);
       setPendingFile(null);
@@ -92,35 +89,35 @@ const Document = () => {
     }
   };
 
-  const filteredDocuments = Array.isArray(documents) ? documents.filter(doc =>
-    (filterType === 'Tous les documents' || doc.name?.endsWith(filterType)) &&
-    (doc.name?.toLowerCase().includes(searchQuery.toLowerCase()) || '') &&
-    (!startDate || new Date(doc.date) >= new Date(startDate)) &&
-    (!endDate || new Date(doc.date) <= new Date(endDate))
-  ) : [];
+  const filteredDocuments = Array.isArray(documents) ? documents.filter(doc => {
+    const matchesType = filterType === 'Tous les documents' || doc.name?.endsWith(filterType);
+    const matchesDateStart = !startDate || new Date(doc.date) >= new Date(startDate);
+    const matchesDateEnd = !endDate || new Date(doc.date) <= new Date(endDate);
+
+    const lowerQuery = searchQuery.toLowerCase();
+
+    const matchesBasic = doc.name?.toLowerCase().includes(lowerQuery);
+    const matchesAdvanced = useAdvancedFilter && doc.text_content?.toLowerCase().includes(lowerQuery);
+
+    return matchesType && matchesDateStart && matchesDateEnd && (matchesBasic || matchesAdvanced);
+  }) : [];
 
   const highlightMatch = (text, query) => {
     if (!query) return [text];
-  
     const regex = new RegExp(`(${query})`, 'gi');
     const parts = text.split(regex);
-  
     return parts.map((part, i) =>
       regex.test(part) ? <span key={i} className="highlight">{part}</span> : part
     );
   };
-  
-  
-  
+
   const consultDocument = (url) => {
     window.open(`http://localhost:5000${url}`, '_blank');
   };
 
   return (
     <div className="container">
-
       <div className="content">
-
         <h1>Gestion des Documents</h1>
 
         <div className="controls">
@@ -163,14 +160,14 @@ const Document = () => {
             <tr>
               <th>Document</th>
               <th>Date</th>
-              <th>category</th>
+              <th>Catégorie</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredDocuments.map(doc => (
               <tr key={doc.id}>
-               <td>{highlightMatch(doc.name, searchQuery)}</td>
+                <td>{highlightMatch(doc.name, searchQuery)}</td>
                 <td>{new Date(doc.date).toLocaleString()}</td>
                 <td>{doc.category}</td>
                 <td className="actions">
@@ -187,17 +184,13 @@ const Document = () => {
         <div className="modal">
           <div className="modal-content">
             <h2>Recherche Avancée</h2>
-            <textarea
-              placeholder="Entrez des détails..."
-              value={advancedDetails}
-              onChange={(e) => setAdvancedDetails(e.target.value)}
-            />
-            <button className="button" onClick={() => setShowAdvancedSearch(false)}>Fermer</button>
+            <p>Nous allons chercher dans le contenu aussi.</p>
+            <button className="button" onClick={() => setShowAdvancedSearch(false)}>Annuler</button>
             <button className="button" onClick={() => {
+              setUseAdvancedFilter(true);
               setShowAdvancedSearch(false);
-              alert('Recherche avancée soumise : ' + advancedDetails);
             }}>
-              Soumettre
+              Rechercher
             </button>
           </div>
         </div>
