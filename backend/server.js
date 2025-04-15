@@ -1,4 +1,5 @@
 require("dotenv").config();
+const pool = require("./config/db");
 const express = require("express");
 const cors = require("cors");
 
@@ -27,3 +28,7 @@ app.use("/api/tasks", workflowsRoutes);
 
 // Lancement du serveur
 app.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
+
+pool.connect()
+  .then(() => console.log("✅ Connexion à la base de données réussie"))
+  .catch((err) => console.error("❌ Erreur de connexion à la base de données :", err));
