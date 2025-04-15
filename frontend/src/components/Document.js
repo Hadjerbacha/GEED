@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './DocumentManagementPage.css';
 import axios from 'axios';
+import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
+import Select from 'react-select';
+import Navbar from './Navbar';
 
 const Document = () => {
   const [documents, setDocuments] = useState([]);
@@ -12,6 +15,7 @@ const Document = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  const [advancedDetails, setAdvancedDetails] = useState('');
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(false);
 
   const token = localStorage.getItem('token');
@@ -39,11 +43,6 @@ const Document = () => {
       return;
     }
 
-    if (pendingFile.size > 10 * 1024 * 1024) {
-      setErrorMessage("Le fichier dépasse la limite de 10 Mo.");
-      return;
-    }
-
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
@@ -59,6 +58,10 @@ const Document = () => {
 
       if (!res.ok) {
         throw new Error(`Erreur : ${res.status}`);
+      }
+      if (pendingFile.size > 10 * 1024 * 1024) {
+        setErrorMessage("Le fichier dépasse la limite de 10 Mo.");
+        return;
       }
 
       const newDoc = await res.json();
@@ -94,12 +97,15 @@ const Document = () => {
     const matchesDateStart = !startDate || new Date(doc.date) >= new Date(startDate);
     const matchesDateEnd = !endDate || new Date(doc.date) <= new Date(endDate);
 
-    const lowerQuery = searchQuery.toLowerCase();
+    const matchesBasicSearch = doc.name?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesBasic = doc.name?.toLowerCase().includes(lowerQuery);
-    const matchesAdvanced = useAdvancedFilter && doc.text_content?.toLowerCase().includes(lowerQuery);
+    const matchesAdvanced =
+      useAdvancedFilter &&
+      (
+        doc.text_content?.toLowerCase().includes(searchQuery.toLowerCase())
+      );
 
-    return matchesType && matchesDateStart && matchesDateEnd && (matchesBasic || matchesAdvanced);
+    return matchesType && matchesDateStart && matchesDateEnd && (matchesBasicSearch || matchesAdvanced);
   }) : [];
 
   const highlightMatch = (text, query) => {
@@ -113,6 +119,14 @@ const Document = () => {
 
   const consultDocument = (url) => {
     window.open(`http://localhost:5000${url}`, '_blank');
+  };
+
+  const handleAdvancedToggle = () => {
+    if (useAdvancedFilter) {
+      setUseAdvancedFilter(false);
+    } else {
+      setUseAdvancedFilter(true);
+    }
   };
 
   return (
@@ -135,7 +149,13 @@ const Document = () => {
           </select>
           <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} />
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
-          <button className="button" onClick={() => setShowAdvancedSearch(true)}>Recherche Avancée</button>
+
+          <button
+            className={useAdvancedFilter ? 'button-sup' : 'button'}
+            onClick={handleAdvancedToggle}
+          >
+            {useAdvancedFilter ? 'Désactiver Recherche Avancée' : 'Activer Recherche Avancée'}
+          </button>
         </div>
 
         {errorMessage && <p className="error">{errorMessage}</p>}
@@ -160,7 +180,7 @@ const Document = () => {
             <tr>
               <th>Document</th>
               <th>Date</th>
-              <th>Catégorie</th>
+              <th>category</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -179,22 +199,6 @@ const Document = () => {
           </tbody>
         </table>
       </div>
-
-      {showAdvancedSearch && (
-        <div className="modal">
-          <div className="modal-content">
-            <h2>Recherche Avancée</h2>
-            <p>Nous allons chercher dans le contenu aussi.</p>
-            <button className="button" onClick={() => setShowAdvancedSearch(false)}>Annuler</button>
-            <button className="button" onClick={() => {
-              setUseAdvancedFilter(true);
-              setShowAdvancedSearch(false);
-            }}>
-              Rechercher
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
