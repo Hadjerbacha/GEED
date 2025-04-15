@@ -131,6 +131,24 @@
     box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
     transform: translateY(-2px);
   }
+  .button-re {
+    background-color: #ffffff;
+    color: #34db50;
+    border: 1px solid #34db50;
+    padding: 0.6rem 1.2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  .button-re:hover {
+    background-color: #18882b;
+    color: white;
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    transform: translateY(-2px);
+  }
   .button-sup {
     background-color: #ffffff;
     color: #3498db;

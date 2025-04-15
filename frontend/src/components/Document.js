@@ -17,6 +17,7 @@ const Document = () => {
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [advancedDetails, setAdvancedDetails] = useState('');
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(false);
+  const [category, setCategory] = useState('');
 
   const token = localStorage.getItem('token');
 
@@ -38,14 +39,20 @@ const Document = () => {
   }, [token]);
 
   const handleUpload = async () => {
-    if (!pendingFile || !pendingName) {
-      setErrorMessage('Veuillez choisir un nom et un fichier.');
+    if (!pendingFile || !pendingName || !category) {
+      setErrorMessage('Veuillez remplir tous les champs requis.');
+      return;
+    }
+
+    if (pendingFile.size > 10 * 1024 * 1024) {
+      setErrorMessage("Le fichier dépasse la limite de 10 Mo.");
       return;
     }
 
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
+    formData.append('category', category);
 
     try {
       const res = await fetch('http://localhost:5000/api/documents/', {
@@ -59,15 +66,12 @@ const Document = () => {
       if (!res.ok) {
         throw new Error(`Erreur : ${res.status}`);
       }
-      if (pendingFile.size > 10 * 1024 * 1024) {
-        setErrorMessage("Le fichier dépasse la limite de 10 Mo.");
-        return;
-      }
 
       const newDoc = await res.json();
       setDocuments([newDoc, ...documents]);
       setPendingFile(null);
       setPendingName('');
+      setCategory('');
       setErrorMessage(null);
     } catch (err) {
       console.error('Erreur d\'upload :', err);
@@ -96,9 +100,7 @@ const Document = () => {
     const matchesType = filterType === 'Tous les documents' || doc.name?.endsWith(filterType);
     const matchesDateStart = !startDate || new Date(doc.date) >= new Date(startDate);
     const matchesDateEnd = !endDate || new Date(doc.date) <= new Date(endDate);
-
     const matchesBasicSearch = doc.name?.toLowerCase().includes(searchQuery.toLowerCase());
-
     const matchesAdvanced =
       useAdvancedFilter &&
       (
@@ -122,11 +124,7 @@ const Document = () => {
   };
 
   const handleAdvancedToggle = () => {
-    if (useAdvancedFilter) {
-      setUseAdvancedFilter(false);
-    } else {
-      setUseAdvancedFilter(true);
-    }
+    setUseAdvancedFilter(prev => !prev);
   };
 
   return (
@@ -151,7 +149,7 @@ const Document = () => {
           <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} />
 
           <button
-            className={useAdvancedFilter ? 'button-sup' : 'button'}
+            className={useAdvancedFilter ? 'button-sup' : 'button-re'}
             onClick={handleAdvancedToggle}
           >
             {useAdvancedFilter ? 'Désactiver Recherche Avancée' : 'Activer Recherche Avancée'}
@@ -172,6 +170,16 @@ const Document = () => {
             onChange={(e) => setPendingFile(e.target.files[0])}
             accept=".pdf,.docx,.jpg,.jpeg,.png"
           />
+          <select
+            value={category}
+            onChange={(e) => setCategory(e.target.value)}
+          >
+            <option value="">Choisir une catégorie</option>
+            <option value="rapport">Rapport</option>
+            <option value="article">Article</option>
+            <option value="mémoire">Mémoire</option>
+            <option value="autre">Autre</option>
+          </select>
           <button className="button" onClick={handleUpload}>Ajouter</button>
         </div>
 
@@ -180,7 +188,7 @@ const Document = () => {
             <tr>
               <th>Document</th>
               <th>Date</th>
-              <th>category</th>
+              <th>Catégorie</th>
               <th>Actions</th>
             </tr>
           </thead>
