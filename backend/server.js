@@ -6,6 +6,7 @@ const cors = require("cors");
 const authRoutes = require("./routes/auth");
 const workflowsRoutes = require("./routes/workflow");
 const docsRoutes = require("./routes/documents");
+const chatRoutes =require("./routes/chatbot");
 const app = express();
 const PORT = process.env.PORT || 5000;
 

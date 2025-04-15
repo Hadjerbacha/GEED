@@ -6,6 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Workflows from './components/Workflowss';
 import Register from './components/Register';
 import Doc from './components/Document';
+import Chat from './components/chat';
 function App() {
   return (
     <Router>
@@ -15,6 +16,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/document" element={<Doc />} />
           <Route path="/workflows" element={<Workflows />} />
+          <Route path="/chat" element={<Chat />} />
         </Routes>
       </Container>
     </Router>
