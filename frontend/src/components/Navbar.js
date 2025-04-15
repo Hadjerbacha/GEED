@@ -98,14 +98,16 @@ const Navbar = () => {
           </Link>
 
           <img src="/11.png" alt="Logo" width="100" height="50" style={{ marginLeft: 'auto', marginRight: 'auto' }} />
-
-          <div className="user-dropdown d-flex align-items-center gap-3">
-            {currentUser && (
-              <>
-                <span className="fw-bold">{currentUser.name} {currentUser.prenom}</span>
+<div>{currentUser && (
+            <>
+                <span className="fw-bold">
+                    {currentUser.nom} {currentUser.prenom}
+                </span>
                 <FontAwesomeIcon icon={faUser} />
-              </>
-            )}
+                </>
+            )}</div>
+          <div className="user-dropdown d-flex align-items-center gap-3">
+          
             <FontAwesomeIcon icon={faSignOutAlt} style={customIconStyle} onClick={handleLogout} title="Déconnexion" />
           </div>
         </div>

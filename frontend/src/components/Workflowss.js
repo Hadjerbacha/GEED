@@ -4,6 +4,8 @@ import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
 import Select from 'react-select';
 import Navbar from './Navbar';
 import Chatbot from './chatbot';
+import OverdueAlert from './Alerts';
+import { jwtDecode } from "jwt-decode";
 
 const Workflowss = () => {
   const [tasks, setTasks] = useState([]);
@@ -22,12 +24,52 @@ const Workflowss = () => {
     notify: false,
   });
 
-  const tasksPerPage = 5;
+  const tasksPerPage = 10;
 
   useEffect(() => {
     fetchTasks();
     fetchUsers();
   }, []);
+
+  
+  const [userId, setUserId] = useState('');
+  const [currentUser, setCurrentUser] = useState(null);
+
+  // 1. Récupérer l'userId à partir du token
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    console.log("Token récupéré :", token);
+
+    if (token) {
+      try {
+        const decodedUser = jwtDecode(token);
+        console.log("Utilisateur décodé :", decodedUser);
+        setUserId(decodedUser.id);  // Ou decodedUser.id selon ton backend
+      } catch (error) {
+        console.error("Erreur lors du décodage du token :", error);
+      }
+    }
+  }, []);
+
+  // 2. Récupérer tous les utilisateurs
+  useEffect(() => {
+    fetch('http://localhost:5000/api/auth/users/') // adapte l’URL si nécessaire
+      .then(response => response.json())
+      .then(data => {
+        setUsers(data);
+      })
+      .catch(error => console.error('Erreur lors de la récupération des utilisateurs :', error));
+  }, []);
+
+  // 3. Trouver l'utilisateur connecté à partir de son ID
+  useEffect(() => {
+    if (userId && users.length > 0) {
+      const foundUser = users.find(user => user.id === userId);
+      if (foundUser) {
+        setCurrentUser(foundUser);
+      }
+    }
+  }, [userId, users]);
 
   const fetchTasks = async () => {
     try {
@@ -176,6 +218,9 @@ const Workflowss = () => {
       <Navbar />
       <br/><br/>
       <h2 className="mb-4">Gestion des Workflows</h2>
+      <h4>
+        Bienvenue, {currentUser ? `${currentUser.name} ${currentUser.prenom}` : "Chargement..."}
+      </h4>
       <Chatbot /> 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <Button onClick={() => openModal(null)}>Nouvelle Tâche</Button>
@@ -186,7 +231,9 @@ const Workflowss = () => {
           onChange={e => setSearch(e.target.value)}
         />
       </div>
-
+      <br/> 
+      <OverdueAlert tasks={tasks} />
+      <br/>
       <Table striped bordered hover responsive>
         <thead>
           <tr>
