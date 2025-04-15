@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import './DocumentManagementPage.css';
+import axios from 'axios';
+import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
+import Select from 'react-select';
+import Navbar from './Navbar';
 
 const Document = () => {
   const [documents, setDocuments] = useState([]);
@@ -95,6 +99,19 @@ const Document = () => {
     (!endDate || new Date(doc.date) <= new Date(endDate))
   ) : [];
 
+  const highlightMatch = (text, query) => {
+    if (!query) return [text];
+  
+    const regex = new RegExp(`(${query})`, 'gi');
+    const parts = text.split(regex);
+  
+    return parts.map((part, i) =>
+      regex.test(part) ? <span key={i} className="highlight">{part}</span> : part
+    );
+  };
+  
+  
+  
   const consultDocument = (url) => {
     window.open(`http://localhost:5000${url}`, '_blank');
   };
@@ -153,7 +170,7 @@ const Document = () => {
           <tbody>
             {filteredDocuments.map(doc => (
               <tr key={doc.id}>
-                <td>{doc.name}</td>
+               <td>{highlightMatch(doc.name, searchQuery)}</td>
                 <td>{new Date(doc.date).toLocaleString()}</td>
                 <td>{doc.category}</td>
                 <td className="actions">

@@ -1,10 +1,12 @@
 require("dotenv").config();
+const pool = require("./config/db");
 const express = require("express");
 const cors = require("cors");
 
 const authRoutes = require("./routes/auth");
 const workflowsRoutes = require("./routes/workflow");
 const docsRoutes = require("./routes/documents");
+const chatRoutes =require("./routes/chatbot");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -27,3 +29,7 @@ app.use("/api/tasks", workflowsRoutes);
 
 // Lancement du serveur
 app.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
+
+pool.connect()
+  .then(() => console.log("✅ Connexion à la base de données réussie"))
+  .catch((err) => console.error("❌ Erreur de connexion à la base de données :", err));

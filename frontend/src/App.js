@@ -8,13 +8,6 @@ import Login from './components/Login';
 import Workflows from './components/Workflowss';
 import Register from './components/Register';
 import Doc from './components/Document';
-
-// ✅ Composant route protégée
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-  return token ? children : <Navigate to="/" />;
-};
-
 function App() {
   return (
     <Router>
@@ -23,24 +16,8 @@ function App() {
           {/* 🔓 Pages accessibles sans connexion */}
           <Route path="/" element={<Login />} />
           <Route path="/register" element={<Register />} />
-
-          {/* 🔒 Pages protégées */}
-          <Route 
-            path="/document" 
-            element={
-              <ProtectedRoute>
-                <Doc />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/workflows" 
-            element={
-              <ProtectedRoute>
-                <Workflows />
-              </ProtectedRoute>
-            } 
-          />
+          <Route path="/document" element={<Doc />} />
+          <Route path="/workflows" element={<Workflows />} />
         </Routes>
       </Container>
     </Router>

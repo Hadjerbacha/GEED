@@ -18,12 +18,13 @@ const pool = new Pool({
   port: process.env.PG_PORT || 5432,
 });
 
-// Création dossier upload
+// Création du dossier upload
 const uploadDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
+// Configuration de multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) => {
@@ -45,7 +46,7 @@ function classifyText(text) {
   return 'autre';
 }
 
-// Initialiser table avec colonne catégorie
+// Initialiser la base de données
 async function initializeDatabase() {
   try {
     await pool.query(`
@@ -54,6 +55,7 @@ async function initializeDatabase() {
         name TEXT NOT NULL,
         file_path TEXT NOT NULL,
         category TEXT,
+        text_content TEXT,
         date TIMESTAMP DEFAULT NOW()
       );
     `);
@@ -74,7 +76,27 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// POST : ajouter document avec OCR et classification
+// GET : recherche dans le texte OCR
+router.get('/search', auth, async (req, res) => {
+  const { q } = req.query;
+
+  if (!q) {
+    return res.status(400).json({ error: 'Paramètre de recherche manquant' });
+  }
+
+  try {
+    const result = await pool.query(
+      `SELECT * FROM documents WHERE LOWER(text_content) LIKE $1 ORDER BY date DESC`,
+      [`%${q.toLowerCase()}%`]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Erreur de recherche:', err.stack);
+    res.status(500).json({ error: 'Erreur serveur', details: err.message });
+  }
+});
+
+// POST : ajout d’un document avec OCR
 router.post('/', auth, upload.single('file'), async (req, res) => {
   const { name } = req.body;
 
@@ -103,17 +125,17 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     const category = classifyText(extractedText);
 
     const query = `
-      INSERT INTO documents (name, file_path, category)
-      VALUES ($1, $2, $3)
+      INSERT INTO documents (name, file_path, category, text_content)
+      VALUES ($1, $2, $3, $4)
       RETURNING *;
     `;
-    const values = [name, file_path, category];
+    const values = [name, file_path, category, extractedText];
 
     const result = await pool.query(query, values);
 
     res.status(201).json({
       ...result.rows[0],
-      preview: extractedText.slice(0, 300) + '...',
+      preview: extractedText.slice(0, 300) + '...'
     });
   } catch (err) {
     console.error('Erreur:', err.stack);
@@ -122,7 +144,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   }
 });
 
-// DELETE : supprimer document
+// DELETE : supprimer un document
 router.delete('/:id', auth, async (req, res) => {
   const { id } = req.params;
 
