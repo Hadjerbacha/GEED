@@ -185,15 +185,82 @@
     display: flex;
     gap: 1rem;
     margin-bottom: 2rem;
-    align-items: center;
     flex-wrap: wrap;
+    align-items: center;
+    background-color: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
   
-  .document-upload input[type="text"] {
-    flex: 1;
-    min-width: 200px;
-    padding: 0.5rem;
+  /* Style commun des inputs et selects */
+  .document-upload input,
+  .document-upload select {
+    padding: 0.6rem 1rem;
+    border: 1px solid #ced4da;
+    border-radius: 6px;
+    background-color: #f8f9fa;
+    transition: all 0.3s ease;
+    font-size: 0.95rem;
   }
+  
+  .document-upload input:focus,
+  .document-upload select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+  }
+  
+  /* Style du bouton de fichier (input[type="file"]) */
+  .document-upload input[type="file"] {
+    display: none;
+  }
+  
+  .document-upload .file-label {
+    padding: 0.6rem 1.2rem;
+    background: linear-gradient(to right, #3498db, #175985);
+    color: white;
+    border-radius: 6px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  
+  .document-upload .file-label:hover {
+    background: linear-gradient(to right, #2980b9, #12496e);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  }
+  
+  .document-upload .file-label:active {
+    transform: translateY(0);
+  }
+  
+  /* Bouton principal */
+  .document-upload button {
+    background: linear-gradient(to right, #3498db, #175985);
+    color: white;
+    padding: 0.6rem 1.2rem;
+    font-size: 0.95rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.3s ease, transform 0.2s ease;
+  }
+  
+  .document-upload button:hover {
+    background: linear-gradient (to right, #2980b9, #12496e);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  }
+  
+  .document-upload button:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  
+  
   
   .document-table {
     width: 100%;
@@ -461,13 +528,31 @@
 }
 
 .button-save {
-  background-color: #f5c518;
+  background-color: #ffffdb;
   color: black;
-  border: none;
-  padding: 5px 8px;
   margin-left: 5px;
-  border-radius: 4px;
   cursor: pointer;
+  border: 1px solid #17364a;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  
+}
+.button-save:hover {
+  background-color: #ffff85;
+  color: black;
+  margin-left: 5px;
+  cursor: pointer;
+  border: 1px solid #17364a;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 /* Modal styles */
 .modal {
@@ -509,3 +594,4 @@
   background-color: #ff0000;
   color: white;
 }
+

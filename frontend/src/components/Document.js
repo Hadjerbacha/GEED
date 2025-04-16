@@ -198,17 +198,23 @@ const Document = () => {
         {errorMessage && <p className="error">{errorMessage}</p>}
 
         <div className="document-upload">
-          <input type="text" placeholder="Nom du document" value={pendingName} onChange={(e) => setPendingName(e.target.value)} />
-          <input type="file" onChange={(e) => setPendingFile(e.target.files[0])} accept=".pdf,.docx,.jpg,.jpeg,.png" />
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            <option value="">Choisir une catégorie</option>
-            <option value="rapport">Rapport</option>
-            <option value="article">Article</option>
-            <option value="mémoire">Mémoire</option>
-            <option value="autre">Autre</option>
-          </select>
-          <button onClick={handleUpload}>Uploader</button>
-        </div>
+  <input type="text" placeholder="Nom du document" value={pendingName} onChange={(e) => setPendingName(e.target.value)} />
+  
+  <label className="file-label">
+    Choisir un fichier
+    <input type="file" onChange={(e) => setPendingFile(e.target.files[0])} accept=".pdf,.docx,.jpg,.jpeg,.png" />
+  </label>
+
+  <select value={category} onChange={(e) => setCategory(e.target.value)}>
+    <option value="">Choisir une catégorie</option>
+    <option value="rapport">Rapport</option>
+    <option value="article">Article</option>
+    <option value="mémoire">Mémoire</option>
+    <option value="autre">Autre</option>
+  </select>
+  <button onClick={handleUpload}>Uploader</button>
+</div>
+
 
         {isSavingCollection && savedDocuments.length > 0 && (
           <div className="saved-collection">
