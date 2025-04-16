@@ -2,30 +2,40 @@
 import React, { useEffect, useState } from 'react';
 import { Alert } from 'react-bootstrap';
 
-const Alerts = ({ tasks }) => {
+const OverdueAlert = ({ tasks }) => {
   const [overdueTasks, setOverdueTasks] = useState([]);
 
+  const currentUserId = parseInt(localStorage.getItem('userId'), 10);
+
   useEffect(() => {
+    if (!tasks || !Array.isArray(tasks) || !currentUserId) return;
+
     const now = new Date();
+
     const overdue = tasks.filter(task => {
       const dueDate = new Date(task.due_date);
-      return dueDate < now && task.status !== 'completed';
+      const isOverdue = dueDate < now;
+      const isNotCompleted = task.status !== 'completed';
+      const isCreatedByUser = task.created_by === currentUserId;
+
+      return isOverdue && isNotCompleted && isCreatedByUser;
     });
+
     setOverdueTasks(overdue);
-  }, [tasks]);
+  }, [tasks, currentUserId]);
 
   if (overdueTasks.length === 0) return null;
 
   return (
-    <>
-      {overdueTasks.length > 0 && (
-        <Alert variant="danger">
-          <strong>⚠️ Tâches en retard :</strong>{' '}
-          {overdueTasks.map(t => t.title).join(', ')}
-        </Alert>
-      )}
-    </>
+    <Alert variant="danger">
+      <strong>⚠️ Tâches en retard (créées par vous) :</strong>{' '}
+      {overdueTasks.map((t, i) => (
+        <span key={i}>
+          {t.title}{i < overdueTasks.length - 1 ? ', ' : ''}
+        </span>
+      ))}
+    </Alert>
   );
 };
 
-export default Alerts;
+export default OverdueAlert;

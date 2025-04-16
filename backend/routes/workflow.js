@@ -4,6 +4,8 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const router = express.Router();
+const authMiddleware = require('../middleware/authMiddleware'); // Assurez-vous que le chemin est correct
+const taskController = require('../controllers/taskController');
 
 const pool = new Pool({
   user: process.env.PG_USER || 'postgres',
@@ -59,79 +61,86 @@ const logger = winston.createLogger({
   ],
 });
 
-router.post('/', upload.single('file'), async (req, res) => {
-    const { title, description, due_date, priority, notify, assigned_to } = req.body;
-    const file_path = req.file ? `/uploads/${req.file.filename}` : null;
-  
-    let userIds;
-    try {
-      userIds = JSON.parse(assigned_to);
-      if (!Array.isArray(userIds) || userIds.length === 0) {
-        return res.status(400).json({ error: 'assigned_to doit être un tableau JSON non vide.' });
-      }
-      userIds = userIds.map(Number); // Convertir les IDs en entiers
-      console.log('assigned_to après conversion:', userIds);
-    } catch (err) {
-      return res.status(400).json({ error: 'assigned_to doit être un tableau JSON valide.' });
+// ⚠️ Ajoute le middleware d'authentification ici
+router.post('/', authMiddleware, upload.single('file'), async (req, res) => {
+  const { title, description, due_date, priority, notify, assigned_to } = req.body;
+  const file_path = req.file ? `/uploads/${req.file.filename}` : null;
+  const created_by = req.user.id; // ✅ Obtenu grâce à authMiddleware
+
+  let userIds;
+  try {
+    userIds = JSON.parse(assigned_to);
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      return res.status(400).json({ error: 'assigned_to doit être un tableau JSON non vide.' });
     }
-  
-    try {
-      if (!userIds.every(id => Number.isInteger(id))) {
-        return res.status(400).json({ error: 'Tous les IDs dans assigned_to doivent être des entiers.' });
-      }
-  
-      // Insertion dans la base de données
-      const result = await pool.query(
-        `INSERT INTO tasks 
-          (title, description, due_date, priority, file_path, notify, assigned_to) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-        [title, description, due_date, priority, file_path, notify === 'true', userIds]
-      );
-  
-      const task = result.rows[0];
-  
-      // Envoi de notification après insertion si besoin
-      if (notify === 'true') {
-        const creator = req.user;
-        await sendNotification(userIds, task, `${creator.name} ${creator.prenom}`);
-      }
-  
-      res.status(201).json(task);
-    } catch (err) {
-      console.error('Error during task insertion:', err);
-      if (req.file) fs.unlink(req.file.path, () => {});
-      res.status(500).json({ error: err.message });
+    userIds = userIds.map(Number);
+  } catch (err) {
+    return res.status(400).json({ error: 'assigned_to doit être un tableau JSON valide.' });
+  }
+
+  try {
+    if (!userIds.every(id => Number.isInteger(id))) {
+      return res.status(400).json({ error: 'Tous les IDs dans assigned_to doivent être des entiers.' });
     }
-  });
-  
-// 📥 Récupérer toutes les tâches
-router.get('/', async (req, res) => {
+
+    // ✅ Insertion avec created_by
+    const result = await pool.query(
+      `INSERT INTO tasks 
+        (title, description, due_date, priority, file_path, notify, assigned_to, created_by) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [title, description, due_date, priority, file_path, notify === 'true', userIds, created_by]
+    );
+
+    const task = result.rows[0];
+
+    if (notify === 'true') {
+      const creator = req.user;
+      await sendNotification(userIds, task, `${creator.name} ${creator.prenom}`);
+    }
+
+    res.status(201).json(task);
+  } catch (err) {
+    console.error('Error during task insertion:', err);
+    if (req.file) fs.unlink(req.file.path, () => {});
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+
+  // 📥 Récupérer toutes les tâches avec noms des assignés et créateurs, avec authentification
+  router.get('/', authMiddleware, async (req, res) => {
     try {
       const tasksResult = await pool.query('SELECT * FROM tasks ORDER BY id DESC');
       const tasks = tasksResult.rows;
   
-      // Récupérer tous les IDs utilisateurs uniques
-      const allAssignedIds = [...new Set(tasks.flatMap(task => task.assigned_to || []))];
-  
-      if (allAssignedIds.length === 0) {
-        return res.json(tasks);
-      }
+      // Récupérer tous les IDs utilisateurs uniques : assignés + créateurs
+      const assignedIds = tasks.flatMap(task => task.assigned_to || []);
+      const creatorIds = tasks.map(task => task.created_by);
+      const allUserIds = [...new Set([...assignedIds, ...creatorIds])];
   
       // Récupérer les noms depuis la table users
-      const usersResult = await pool.query(
-        `SELECT id, name, prenom FROM users WHERE id = ANY($1)`,
-        [allAssignedIds]
-      );
-      const usersMap = Object.fromEntries(usersResult.rows.map(u => [u.id, `${u.name} ${u.prenom}`]));
+      let usersMap = {};
+      if (allUserIds.length > 0) {
+        const usersResult = await pool.query(
+          'SELECT id, name, prenom FROM users WHERE id = ANY($1)',
+          [allUserIds]
+        );
+        usersMap = Object.fromEntries(
+          usersResult.rows.map(user => [user.id, `${user.name} ${user.prenom}`])
+        );
+      }
   
-      // Remplacer les IDs dans assigned_to par les noms
+      // Enrichir les tâches avec noms assignés et créateur
       const enrichedTasks = tasks.map(task => ({
         ...task,
-        assigned_names: (task.assigned_to || []).map(id => usersMap[id] || `ID ${id}`)
+        assigned_names: (task.assigned_to || []).map(id => usersMap[id] || `ID ${id}`),
+        created_by_name: usersMap[task.created_by] || `ID ${task.created_by}`
       }));
   
       res.json(enrichedTasks);
     } catch (err) {
+      console.error('Erreur dans GET /tasks:', err.message);
       res.status(500).json({ error: err.message });
     }
   });
@@ -139,7 +148,7 @@ router.get('/', async (req, res) => {
 
 // ✏️ Modifier une tâche
 /// ✏️ Modifier une tâche (et gérer assigned_to en optionnel)
-router.put('/:id', upload.single('file'), async (req, res) => {
+router.put('/:id',authMiddleware, upload.single('file'), async (req, res) => {
     const taskId = parseInt(req.params.id, 10);
     const { title, description, due_date, priority, notify, assigned_to } = req.body;
     let file_path = null;
@@ -200,7 +209,7 @@ router.put('/:id', upload.single('file'), async (req, res) => {
   
   
   
-router.delete('/:id', async (req, res) => {
+router.delete('/:id',authMiddleware, async (req, res) => {
   const taskId = parseInt(req.params.id, 10);
   try {
     const result = await pool.query('DELETE FROM tasks WHERE id = $1 RETURNING *', [taskId]);
@@ -218,7 +227,7 @@ router.delete('/:id', async (req, res) => {
 });
 
 // 🔄 Mettre à jour uniquement le status
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status',authMiddleware, async (req, res) => {
     const taskId = parseInt(req.params.id, 10);
     const { status } = req.body;
   
@@ -240,5 +249,59 @@ router.patch('/:id/status', async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+  
+  router.post('/notify', authMiddleware, async (req, res) => {
+    const { assigned_to, title, description, due_date } = req.body;
+  
+    try {
+      const usersResult = await pool.query('SELECT id, email, name FROM users WHERE id = ANY($1)', [assigned_to]);
+      const users = usersResult.rows;
+  
+      for (const user of users) {
+        await sendNotification(user.email, {
+          subject: `Nouvelle tâche assignée : ${title}`,
+          text: `Bonjour ${user.name},\n\nUne nouvelle tâche vous a été assignée :\n\nTitre : ${title}\nDescription : ${description}\nDate d'échéance : ${due_date}`
+        });
+      }
+  
+      res.status(200).json({ message: 'Notifications envoyées avec succès.' });
+    } catch (err) {
+      logger.error(`Erreur lors de l'envoi des notifications : ${err.message}`);
+      res.status(500).json({ error: 'Erreur lors de l’envoi des notifications.' });
+    }
+  });
+  
+
+  const nodemailer = require('nodemailer');
+
+  const sendNotification = async (toEmail, { subject, text }) => {
+    if (!toEmail) {
+      console.error('Adresse email invalide ou absente');
+      return;
+    }
+  
+    let transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'hadjerbachasais@gmail.com',
+        pass: 'ruyf zukf fyhq otje'
+      }
+    });
+  
+    const mailOptions = {
+      from: 'hadjerbachasais@gmail.com',
+      to: toEmail,
+      subject: subject,
+      text: text
+    };
+  
+    try {
+      await transporter.sendMail(mailOptions);
+      console.log('Notification envoyée à', toEmail);
+    } catch (error) {
+      console.error('Erreur envoi notification :', error);
+    }
+  };
+  
   
 module.exports = router;

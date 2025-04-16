@@ -5,7 +5,7 @@ import Select from 'react-select';
 import Navbar from './Navbar';
 import Chatbot from './chatbot';
 import OverdueAlert from './Alerts';
-import { jwtDecode } from "jwt-decode";
+import {jwtDecode} from 'jwt-decode';
 
 const Workflowss = () => {
   const [tasks, setTasks] = useState([]);
@@ -25,60 +25,50 @@ const Workflowss = () => {
   });
 
   const tasksPerPage = 10;
+  useEffect(() => {
+    // Fonction à exécuter au chargement de la page
+    (function () {
+    })();
+    // Récupérer le jeton JWT depuis le stockage local
+    const token = localStorage.getItem('token');
+    console.log("tokennnnnnnn",token)
+
+    if (token) {
+      // Déchiffrer le jeton JWT pour obtenir les informations de l'utilisateur
+      const decodedUser = jwtDecode(token);
+      console.log("user",decodedUser)
+
+  
+      
+    }
+  }, []);
 
   useEffect(() => {
     fetchTasks();
     fetchUsers();
-  }, []);
-
+  }, []); // Notez que fetchTasks n'est plus inclus dans le tableau des dépendances si vous ne voulez pas qu'il se réexécute.
   
-  const [userId, setUserId] = useState('');
-  const [currentUser, setCurrentUser] = useState(null);
-
-  // 1. Récupérer l'userId à partir du token
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    console.log("Token récupéré :", token);
-
-    if (token) {
-      try {
-        const decodedUser = jwtDecode(token);
-        console.log("Utilisateur décodé :", decodedUser);
-        setUserId(decodedUser.id);  // Ou decodedUser.id selon ton backend
-      } catch (error) {
-        console.error("Erreur lors du décodage du token :", error);
-      }
-    }
-  }, []);
-
-  // 2. Récupérer tous les utilisateurs
-  useEffect(() => {
-    fetch('http://localhost:5000/api/auth/users/') // adapte l’URL si nécessaire
-      .then(response => response.json())
-      .then(data => {
-        setUsers(data);
-      })
-      .catch(error => console.error('Erreur lors de la récupération des utilisateurs :', error));
-  }, []);
-
-  // 3. Trouver l'utilisateur connecté à partir de son ID
-  useEffect(() => {
-    if (userId && users.length > 0) {
-      const foundUser = users.find(user => user.id === userId);
-      if (foundUser) {
-        setCurrentUser(foundUser);
-      }
-    }
-  }, [userId, users]);
-
   const fetchTasks = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/tasks/');
+      const token = localStorage.getItem('token'); // ✅ Directement ici
+  
+      if (!token) {
+        console.error("Token manquant");
+        return;
+      }
+  
+      const res = await axios.get('http://localhost:5000/api/tasks/', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
       setTasks(res.data);
     } catch (err) {
-      console.error('Erreur chargement des tâches', err);
+      console.error('Erreur chargement des tâches', err?.response?.data || err.message);
     }
   };
+  
+  
 
   const fetchUsers = async () => {
     try {
@@ -141,6 +131,9 @@ const Workflowss = () => {
   const handleSubmit = async e => {
     e.preventDefault();
     const data = new FormData();
+  
+    const user = JSON.parse(localStorage.getItem('user')); // 👈 Récupération du user connecté
+  
     for (const key in formData) {
       if (key === 'assigned_to') {
         data.append(key, JSON.stringify(formData[key]));
@@ -148,41 +141,78 @@ const Workflowss = () => {
         data.append(key, formData[key]);
       }
     }
-
+  
+    if (user?.id) {
+      data.append('created_by', user.id); // 👈 Ajout de created_by dans FormData
+    }
+  
     const endpoint = editingTask
       ? `http://localhost:5000/api/tasks/${editingTask.id}`
       : 'http://localhost:5000/api/tasks/';
-
+  
     try {
       await axios({
         method: editingTask ? 'put' : 'post',
         url: endpoint,
         data,
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${localStorage.getItem('token')}` // 👈 Auth si besoin
+        }
       });
+      if (!editingTask && formData.notify) {
+        try {
+          await axios.post('http://localhost:5000/api/tasks/notify', {
+            assigned_to: formData.assigned_to,
+            title: formData.title,
+            description: formData.description,
+            due_date: formData.due_date,
+          }, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          console.log("Notification envoyée");
+        } catch (err) {
+          console.error("Erreur lors de l'envoi de la notification", err);
+        }
+      }
+      
       fetchTasks();
       closeModal();
     } catch (err) {
       console.error("Erreur d'enregistrement :", err);
     }
   };
+  
 
   const handleDelete = async id => {
     if (window.confirm("Confirmer la suppression ?")) {
       try {
-        await axios.delete(`http://localhost:5000/api/tasks/${id}`);
+        const token = localStorage.getItem('token'); // ou sessionStorage selon ton app
+        await axios.delete(`http://localhost:5000/api/tasks/${id}`, {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        });
         fetchTasks();
       } catch (err) {
         console.error("Erreur suppression :", err);
       }
     }
   };
+  
+  const user = JSON.parse(localStorage.getItem('user'));
 
-  const filteredTasks = tasks.filter(task =>
+  const userTasks = tasks.filter(task =>
+    task.created_by === user.id || (task.assigned_to || []).includes(user.id)
+  );
+  
+  const filteredTasks = userTasks.filter(task =>
     task.title?.toLowerCase().includes(search.toLowerCase()) ||
     task.description?.toLowerCase().includes(search.toLowerCase())
   );
-
+  
   const currentTasks = filteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage);
 
   const getStatusColor = (status) => {
@@ -197,10 +227,12 @@ const Workflowss = () => {
   
   const handleStatusChange = async (taskId, newStatus) => {
     try {
+      const token = localStorage.getItem('token');
       const res = await fetch(`http://localhost:5000/api/tasks/${taskId}/status`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
         },
         body: JSON.stringify({ status: newStatus })
       });
@@ -218,9 +250,6 @@ const Workflowss = () => {
       <Navbar />
       <br/><br/>
       <h2 className="mb-4">Gestion des Workflows</h2>
-      <h4>
-        Bienvenue, {currentUser ? `${currentUser.name} ${currentUser.prenom}` : "Chargement..."}
-      </h4>
       <Chatbot /> 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <Button onClick={() => openModal(null)}>Nouvelle Tâche</Button>
@@ -341,9 +370,16 @@ const Workflowss = () => {
               <Form.Label>Fichier</Form.Label>
               <Form.Control type="file" name="file" onChange={handleInputChange} />
             </Form.Group>
-            <Form.Group className="mt-2">
-              <Form.Check type="checkbox" name="notify" label="Notifier par Email" checked={formData.notify} onChange={handleInputChange} />
-            </Form.Group>
+            <Form.Group controlId="notifyCheckbox">
+  <Form.Check
+    type="checkbox"
+    label="Envoyer une notification"
+    name="notify"
+    checked={formData.notify}
+    onChange={handleInputChange}
+  />
+</Form.Group>
+
             <Button variant="primary" type="submit" className="mt-3">
               {editingTask ? 'Modifier' : 'Créer'}
             </Button>
