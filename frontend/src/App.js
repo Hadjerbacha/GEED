@@ -6,7 +6,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Workflows from './components/Workflowss';
 import Register from './components/Register';
 import Doc from './components/Document';
-import Task from './components/Tasks';
 import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
 
 function App() {
@@ -21,7 +20,6 @@ function App() {
           {/* Routes protégées */}
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
-          <Route path="/tasks" element={<ProtectedRoute element={<Task />} />} />
         </Routes>
       </Container>
     </Router>
