@@ -72,10 +72,20 @@ const Navbar = () => {
       path: '/Document',
       icon: <FaIcons.FaPlus />,
     },
-    {
+    /*{
       title: 'Workflows',
       path: '/workflows',
       icon: <FaIcons.FaTasks />,
+    },*/
+    {
+      title: 'Tâches créées par moi',
+      path: '/workflows',
+      icon: <FaIcons.FaClipboardList />,
+    },
+    {
+      title: 'Tâches assignées à moi',
+      path: '/mes-taches',
+      icon: <FaIcons.FaUserCheck />,
     },
     {
       title: 'Tableau de bord',

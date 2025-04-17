@@ -352,5 +352,21 @@ router.patch('/:id/status',authMiddleware, async (req, res) => {
     }
   };
   
-  
+  // PATCH /api/tasks/:id/comment
+router.patch('/:id/comment', authMiddleware, async (req, res) => {
+  const { assignment_note } = req.body;
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      'UPDATE tasks SET assignment_note = $1 WHERE id = $2 RETURNING *',
+      [assignment_note, id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur lors de l’ajout du commentaire :', err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
 module.exports = router;
