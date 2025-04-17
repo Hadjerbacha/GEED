@@ -248,7 +248,7 @@ const Workflowss = () => {
   return (
     <div className="container-fluid mt-4">
       <Navbar />
-      <br/><br/>
+      <br/>
       <h2 className="mb-4">Gestion des Workflows</h2>
       <Chatbot /> 
       <div className="d-flex justify-content-between align-items-center mb-3">
@@ -317,7 +317,7 @@ const Workflowss = () => {
         </tbody>
       </Table>
 
-      <Pagination>
+      <Pagination  style={{ zIndex: 100, position: "relative" }}>
         {Array.from({ length: Math.ceil(filteredTasks.length / tasksPerPage) }, (_, idx) => (
           <Pagination.Item
             key={idx + 1}
@@ -345,9 +345,16 @@ const Workflowss = () => {
               <Form.Control as="textarea" name="description" value={formData.description} onChange={handleInputChange} required />
             </Form.Group>
             <Form.Group>
-              <Form.Label>Échéance</Form.Label>
-              <Form.Control type="date" name="due_date" value={formData.due_date} onChange={handleInputChange} required />
-            </Form.Group>
+  <Form.Label>Échéance</Form.Label>
+  <Form.Control
+    type="date"
+    name="due_date"
+    value={formData.due_date}
+    onChange={handleInputChange}
+    min={new Date().toISOString().split('T')[0]} // 👉 empêche les dates passées
+    required
+  />
+</Form.Group>
             <Form.Group>
               <Form.Label>Priorité</Form.Label>
               <Form.Select name="priority" value={formData.priority} onChange={handleInputChange}>

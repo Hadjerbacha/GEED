@@ -7,7 +7,7 @@ import Workflows from './components/Workflowss';
 import Register from './components/Register';
 import Doc from './components/Document';
 import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
-
+import AssignedTasks from './components/AssignedTasks';
 function App() {
   return (
     <Router>
@@ -20,6 +20,7 @@ function App() {
           {/* Routes protégées */}
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
+          <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
         </Routes>
       </Container>
     </Router>

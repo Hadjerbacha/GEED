@@ -79,7 +79,7 @@ const Navbar = () => {
     },
     {
       title: 'Tableau de bord',
-      path: '/dashboard',
+      path: '/mes-taches',
       icon: <FaIcons.FaChartBar />,
     },
     {
@@ -113,7 +113,7 @@ const Navbar = () => {
         </div>
       </div>
 
-      <nav className={sidebar ? 'nav-menu active' : 'nav-menu'}>
+      <nav className={sidebar ? 'nav-menu active' : 'nav-menu'} style={{ zIndex: 200 }}>
         <ul className="nav-menu-items" onClick={showSidebar}>
           <li className="navbar-toggle">
             <Link to="#" className="menu-bars">

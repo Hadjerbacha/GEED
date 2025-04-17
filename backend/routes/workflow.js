@@ -108,43 +108,92 @@ router.post('/', authMiddleware, upload.single('file'), async (req, res) => {
 
 
 
-  // 📥 Récupérer toutes les tâches avec noms des assignés et créateurs, avec authentification
-  router.get('/', authMiddleware, async (req, res) => {
-    try {
-      const tasksResult = await pool.query('SELECT * FROM tasks ORDER BY id DESC');
-      const tasks = tasksResult.rows;
-  
-      // Récupérer tous les IDs utilisateurs uniques : assignés + créateurs
-      const assignedIds = tasks.flatMap(task => task.assigned_to || []);
-      const creatorIds = tasks.map(task => task.created_by);
-      const allUserIds = [...new Set([...assignedIds, ...creatorIds])];
-  
-      // Récupérer les noms depuis la table users
-      let usersMap = {};
-      if (allUserIds.length > 0) {
-        const usersResult = await pool.query(
-          'SELECT id, name, prenom FROM users WHERE id = ANY($1)',
-          [allUserIds]
-        );
-        usersMap = Object.fromEntries(
-          usersResult.rows.map(user => [user.id, `${user.name} ${user.prenom}`])
-        );
-      }
-  
-      // Enrichir les tâches avec noms assignés et créateur
-      const enrichedTasks = tasks.map(task => ({
-        ...task,
-        assigned_names: (task.assigned_to || []).map(id => usersMap[id] || `ID ${id}`),
-        created_by_name: usersMap[task.created_by] || `ID ${task.created_by}`
-      }));
-  
-      res.json(enrichedTasks);
-    } catch (err) {
-      console.error('Erreur dans GET /tasks:', err.message);
-      res.status(500).json({ error: err.message });
+  // 📥 Récupérer les tâches créées par l'utilisateur connecté (ignorer celles juste assignées)
+router.get('/', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Obtenir uniquement les tâches créées par l'utilisateur
+    const tasksResult = await pool.query(
+      'SELECT * FROM tasks WHERE created_by = $1 ORDER BY id DESC',
+      [userId]
+    );
+    const tasks = tasksResult.rows;
+
+    // Extraire les IDs nécessaires : assignés + créateurs (ici juste userId)
+    const assignedIds = tasks.flatMap(task => task.assigned_to || []);
+    const allUserIds = [...new Set([...assignedIds, userId])];
+
+    // Récupérer les noms depuis la table users
+    let usersMap = {};
+    if (allUserIds.length > 0) {
+      const usersResult = await pool.query(
+        'SELECT id, name, prenom FROM users WHERE id = ANY($1)',
+        [allUserIds]
+      );
+      usersMap = Object.fromEntries(
+        usersResult.rows.map(user => [user.id, `${user.name} ${user.prenom}`])
+      );
     }
-  });
+
+    // Enrichir les tâches avec noms assignés et créateur
+    const enrichedTasks = tasks.map(task => ({
+      ...task,
+      assigned_names: (task.assigned_to || []).map(id => usersMap[id] || `ID ${id}`),
+      created_by_name: usersMap[task.created_by] || `ID ${task.created_by}`
+    }));
+
+    res.json(enrichedTasks);
+  } catch (err) {
+    console.error('Erreur dans GET /tasks:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
   
+// 📥 Récupérer uniquement les tâches assignées à l'utilisateur connecté
+router.get('/mes-taches', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Récupérer les tâches où l'utilisateur est dans le tableau assigned_to
+    const tasksResult = await pool.query(
+      `SELECT * FROM tasks WHERE $1 = ANY(assigned_to) ORDER BY id DESC`,
+      [userId]
+    );
+    const tasks = tasksResult.rows;
+
+    // Récupérer les IDs utilisateurs nécessaires
+    const assignedIds = tasks.flatMap(task => task.assigned_to || []);
+    const creatorIds = tasks.map(task => task.created_by);
+    const allUserIds = [...new Set([...assignedIds, ...creatorIds])];
+
+    // Mapping utilisateurs
+    let usersMap = {};
+    if (allUserIds.length > 0) {
+      const usersResult = await pool.query(
+        'SELECT id, name, prenom FROM users WHERE id = ANY($1)',
+        [allUserIds]
+      );
+      usersMap = Object.fromEntries(
+        usersResult.rows.map(user => [user.id, `${user.name} ${user.prenom}`])
+      );
+    }
+
+    // Enrichir les tâches
+    const enrichedTasks = tasks.map(task => ({
+      ...task,
+      assigned_names: (task.assigned_to || []).map(id => usersMap[id] || `ID ${id}`),
+      created_by_name: usersMap[task.created_by] || `ID ${task.created_by}`
+    }));
+
+    res.json(enrichedTasks);
+  } catch (err) {
+    console.error('Erreur dans GET /mes-taches:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 
 // ✏️ Modifier une tâche
 /// ✏️ Modifier une tâche (et gérer assigned_to en optionnel)

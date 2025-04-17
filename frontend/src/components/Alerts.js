@@ -27,7 +27,7 @@ const OverdueAlert = ({ tasks }) => {
   if (overdueTasks.length === 0) return null;
 
   return (
-    <Alert variant="danger">
+    <Alert variant="danger" >
       <strong>⚠️ Tâches en retard (créées par vous) :</strong>{' '}
       {overdueTasks.map((t, i) => (
         <span key={i}>
