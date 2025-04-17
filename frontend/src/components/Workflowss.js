@@ -80,16 +80,34 @@ const Workflowss = () => {
     }
   };
 
+  const formatDateForInput = (dateString) => {
+    const date = new Date(dateString);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+  
   const openModal = task => {
     if (task) {
+      const assigned =
+        Array.isArray(task.assigned_ids)
+          ? task.assigned_ids
+          : Array.isArray(task.assigned_to)
+            ? (typeof task.assigned_to[0] === 'object'
+                ? task.assigned_to.map(u => u.id)
+                : task.assigned_to)
+            : [];
+  
       setEditingTask(task);
       setFormData({
         title: task.title,
         description: task.description,
-        due_date: task.due_date?.split('T')[0],
+        due_date: formatDateForInput(task.due_date),
         priority: task.priority,
-        assigned_to: task.assigned_ids || [],
+        assigned_to: assigned,
         file: null,
+        fileName: task.file_name || '',
         notify: false
       });
     } else {
@@ -97,6 +115,7 @@ const Workflowss = () => {
     }
     setShowModal(true);
   };
+  
 
   const resetForm = () => {
     setEditingTask(null);
@@ -249,7 +268,6 @@ const Workflowss = () => {
     <div className="container-fluid mt-4">
       <Navbar />
       <br/>
-      <h2 className="mb-4">Gestion des Workflows</h2>
       <Chatbot /> 
       <div className="d-flex justify-content-between align-items-center mb-3">
         <Button onClick={() => openModal(null)}>Nouvelle Tâche</Button>
@@ -374,9 +392,26 @@ const Workflowss = () => {
               />
             </Form.Group>
             <Form.Group>
-              <Form.Label>Fichier</Form.Label>
-              <Form.Control type="file" name="file" onChange={handleInputChange} />
-            </Form.Group>
+  <Form.Label>Fichier</Form.Label>
+  <Form.Control type="file" name="file" onChange={handleInputChange} />
+  
+  {/* Affiche le fichier existant si on édite une tâche et qu'un fichier est présent */}
+  {editingTask && formData.fileName && (
+    <div className="mt-2">
+      <small className="text-muted">
+        Fichier existant :{" "}
+        <a
+          href={`http://localhost:5000${editingTask.file_path}`}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {formData.fileName}
+        </a>
+      </small>
+    </div>
+  )}
+</Form.Group>
+
             <Form.Group controlId="notifyCheckbox">
   <Form.Check
     type="checkbox"
