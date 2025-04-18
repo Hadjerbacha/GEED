@@ -6,6 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Workflows from './components/Workflowss';
 import Register from './components/Register';
 import Doc from './components/Document';
+import AdminUsers from './components/AdminUsers';
 import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
 import AssignedTasks from './components/AssignedTasks';
 function App() {
@@ -15,9 +16,9 @@ function App() {
         <Routes>
           {/* Route non protégée */}
           <Route path="/" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          
           {/* Routes protégées */}
+          <Route path="/register" element={<ProtectedRoute element={<Register />} />} />
+          <Route path="/AdminUsers" element={<ProtectedRoute element={<AdminUsers />} />} />
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />

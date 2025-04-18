@@ -35,9 +35,12 @@ const Navbar = () => {
     const token = localStorage.getItem('token');
     if (token) {
       const decoded = jwtDecode(token);
-      setUserId(decoded.userId);
+      console.log("Token décodé:", decoded);
+      setUserId(decoded.id); // ici tu fixes le problème
     }
   }, []);
+  
+  
 
   // Récupérer la liste des utilisateurs
   useEffect(() => {
@@ -50,11 +53,17 @@ const Navbar = () => {
   // Associer userId au user courant
   useEffect(() => {
     if (userId && users.length > 0) {
-      const found = users.find(u => u._id === userId);
+      const found = users.find(u => u.id === userId);
       if (found) setCurrentUser(found);
     }
   }, [userId, users]);
 
+  useEffect(() => {
+    if (currentUser) {
+      console.log("Utilisateur connecté :", currentUser);
+    }
+  }, [currentUser]);
+  
   // Menu selon rôle
   const sidebarItems = [
     {
@@ -62,11 +71,12 @@ const Navbar = () => {
       path: '/',
       icon: <AiIcons.AiFillHome />,
     },
-    {
-      title: currentUser?.role === 'admin' ? 'Ajouter utilisateur' : 'Utilisateurs',
-      path: currentUser?.role === 'admin' ? '/Register' : '/consulte',
-      icon: currentUser?.role === 'admin' ? <FaIcons.FaUserPlus /> : <FaIcons.FaUsers />,
+    currentUser?.role === 'admin' && {
+      title: 'Ajouter utilisateur',
+      path: '/AdminUsers',
+      icon: <FaIcons.FaUserPlus />,
     },
+    
     {
       title: 'Documents',
       path: '/Document',
@@ -108,14 +118,14 @@ const Navbar = () => {
           </Link>
 
           <img src="/11.png" alt="Logo" width="100" height="50" style={{ marginLeft: 'auto', marginRight: 'auto' }} />
-<div>{currentUser && (
-            <>
-                <span className="fw-bold">
-                    {currentUser.nom} {currentUser.prenom}
-                </span>
-                <FontAwesomeIcon icon={faUser} />
-                </>
-            )}</div>
+<div>{currentUser ? (
+  <div className="text-success">
+    Connecté : {currentUser.name} {currentUser.prenom} ({currentUser.role})
+  </div>
+) : (
+  <div className="text-danger">Aucun utilisateur connecté</div>
+)}
+</div>
           <div className="user-dropdown d-flex align-items-center gap-3">
           
             <FontAwesomeIcon icon={faSignOutAlt} style={customIconStyle} onClick={handleLogout} title="Déconnexion" />
@@ -133,18 +143,16 @@ const Navbar = () => {
 
           
 
-          {sidebarItems.map((item, index) => (
-            <li key={index} className="nav-text">
-              <Link to={item.path}>
-                {item.icon}
-                <span className="ms-2">{item.title}</span>
-              </Link>
-            </li>
-          ))}
-
-          <li className="nav-text mt-3">
-            <Button variant="danger" onClick={handleLogout} className="w-100">Déconnexion</Button>
-          </li>
+          {sidebarItems
+  .filter(Boolean)
+  .map((item, index) => (
+    <li key={index} className="nav-text">
+      <Link to={item.path}>
+        {item.icon}
+        <span className="ms-2">{item.title}</span>
+      </Link>
+    </li>
+))}
         </ul>
       </nav>
     </IconContext.Provider>

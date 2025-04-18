@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { getUsers, findUserByEmail, createUser } = require("../models/userModel");
+const { getUsers, findUserByEmail, createUser, updateUser, deleteUser } = require("../models/userModel");
 require("dotenv").config();
 
 
@@ -68,5 +68,38 @@ const register = async (req, res) => {
   }
 };
 
+// Mettre à jour un utilisateur
+const updateUserController = async (req, res) => {
+  const { id } = req.params;
+  const { name, prenom, email, role } = req.body;
 
-module.exports = { getUsersController, login, register }; 
+  try {
+    const updated = await updateUser(id, { name, prenom, email, role });
+    res.status(200).json({ message: "Utilisateur mis à jour", user: updated });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// Supprimer un utilisateur
+const deleteUserController = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const deleted = await deleteUser(id);
+    if (!deleted) return res.status(404).json({ message: "Utilisateur introuvable" });
+    res.status(200).json({ message: "Utilisateur supprimé", user: deleted });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+module.exports = {
+  getUsersController,
+  login,
+  register,
+  updateUserController,
+  deleteUserController
+};

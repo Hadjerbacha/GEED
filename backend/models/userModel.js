@@ -29,4 +29,28 @@ const getUsers = async () => {
 };
 
 
-module.exports = { findUserByEmail, createUser, getUsers };
+// Modifier un utilisateur
+const updateUser = async (id, { name, prenom, email, role }) => {
+  const result = await pool.query(
+    `UPDATE users SET name = $1, prenom = $2, email = $3, role = $4 WHERE id = $5 RETURNING *`,
+    [name, prenom, email, role, id]
+  );
+  return result.rows[0];
+};
+
+// Supprimer un utilisateur
+const deleteUser = async (id) => {
+  const result = await pool.query(
+    `DELETE FROM users WHERE id = $1 RETURNING *`,
+    [id]
+  );
+  return result.rows[0];
+};
+
+module.exports = {
+  findUserByEmail,
+  createUser,
+  getUsers,
+  updateUser,
+  deleteUser
+};
