@@ -183,7 +183,6 @@ const AssignedTasks = () => {
   
   return (
     <div className="container-fluid mt-4">
-      <br />
       <Navbar />
 
       <div className="d-flex justify-content-end align-items-center mb-3">
