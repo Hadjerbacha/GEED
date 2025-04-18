@@ -5,10 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import '../style/Navbar.css';
 import { IconContext } from 'react-icons';
 import { jwtDecode } from 'jwt-decode';
-
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faSignOutAlt, faUser } from '@fortawesome/free-solid-svg-icons';
-import { Button } from 'react-bootstrap';
+import Dropdown from 'react-bootstrap/Dropdown';
 
 const Navbar = () => {
   const [sidebar, setSidebar] = useState(false);
@@ -17,11 +14,7 @@ const Navbar = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const navigate = useNavigate();
 
-  const customIconStyle = {
-    fontSize: '24px',
-    transition: 'color 0.3s',
-    cursor: 'pointer',
-  };
+
 
   const showSidebar = () => setSidebar(!sidebar);
 
@@ -118,18 +111,25 @@ const Navbar = () => {
           </Link>
 
           <img src="/11.png" alt="Logo" width="100" height="50" style={{ marginLeft: 'auto', marginRight: 'auto' }} />
-<div>{currentUser ? (
-  <div className="text-success">
-    Connecté : {currentUser.name} {currentUser.prenom} ({currentUser.role})
-  </div>
+          {currentUser ? (
+  <Dropdown>
+    <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
+      {currentUser.name} {currentUser.prenom}
+    </Dropdown.Toggle>
+
+    <Dropdown.Menu>
+      <Dropdown.Item href="/help">Aide</Dropdown.Item>
+      <Dropdown.Divider />
+      <Dropdown.Item onClick={handleLogout} className="text-danger">
+        Déconnexion
+      </Dropdown.Item>
+    </Dropdown.Menu>
+  </Dropdown>
 ) : (
   <div className="text-danger">Aucun utilisateur connecté</div>
 )}
-</div>
-          <div className="user-dropdown d-flex align-items-center gap-3">
-          
-            <FontAwesomeIcon icon={faSignOutAlt} style={customIconStyle} onClick={handleLogout} title="Déconnexion" />
-          </div>
+
+
         </div>
       </div>
 
