@@ -262,14 +262,20 @@ const AssignedTasks = () => {
                 <td>{task.description}</td>
                 <td>{new Date(task.due_date).toLocaleDateString()}</td>
                 <td>
-                {(() => {
-                    const today = new Date();
-                    const dueDate = new Date(task.due_date);
-                    const diffTime = dueDate - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                    return diffDays >= 0 ? `${diffDays} jour(s)` : "⛔ Dépassée";
-                })()}
-                </td>
+  {(() => {
+    const today = new Date();
+    const dueDate = new Date(task.due_date);
+    const diffTime = dueDate - today;
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (task.status === "completed") {
+      return "✅ Terminée";
+    }
+
+    return diffDays >= 0 ? `${diffDays} jour(s)` : "⛔ Dépassée";
+  })()}
+</td>
+
                 <td className={getPriorityColor(task.priority)}>
                     {task.priority}
                 </td>
