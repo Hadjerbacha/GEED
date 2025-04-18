@@ -182,7 +182,7 @@ const AssignedTasks = () => {
 
   
   return (
-    <div className="container-fluid mt-4">
+    <div className="container-fluid">
       <Navbar />
 
       <div className="d-flex justify-content-end align-items-center mb-3">
@@ -323,7 +323,9 @@ const AssignedTasks = () => {
                 ))}
             </Pagination>
 
-      <Modal show={showModal} onHide={handleCloseModal}>
+      <Modal show={showModal} onHide={handleCloseModal}  style={{ zIndex: 1050 }}
+  backdrop="static"
+  centered>
         <Modal.Header closeButton>
             <Modal.Title>💬 Commentaire sur la tâche</Modal.Title>
         </Modal.Header>

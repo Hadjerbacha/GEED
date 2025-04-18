@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { Modal, Button, Form, Table } from "react-bootstrap";
 import Navbar from './Navbar';
+import Groupe from './Groupe';
+import Tabs from 'react-bootstrap/Tabs';
+import Tab from 'react-bootstrap/Tab';
 const AdminUsers = () => {
 	const [users, setUsers] = useState([]);
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -112,13 +115,33 @@ const AdminUsers = () => {
 	
 
 	return (
-		<div className="container-fluid mt-4">
+		<div className="container-fluid">
 			<Navbar />
-			<Button variant="success" onClick={() => setShowAddModal(true)}>
-				Ajouter un utilisateur
-			</Button>
 
-			<Table striped bordered hover className="mt-3">
+            <style>
+{`
+  .custom-tabs .nav-link {
+    color:rgb(0, 0, 0);
+    background-color: transparent;
+    border-radius: 10px;
+  }
+
+  .custom-tabs .nav-link.active {
+    color: white !important;
+    background-color: #0d6efd;
+    border-radius: 10px;
+  }
+`}
+</style>
+
+
+                <Tabs defaultActiveKey="users" id="admin-tabs" className="mb-3 custom-tabs">
+                <Tab eventKey="users" title="Utilisateurs">
+                {/* Section des utilisateurs ici (déjà existante) */}
+                <Button variant="success" onClick={() => setShowAddModal(true)}>
+				Ajouter un utilisateur
+			    </Button>
+                <Table striped bordered hover className="mt-3">
 				<thead>
 					<tr>
 						<th>Nom</th>
@@ -150,11 +173,22 @@ const AdminUsers = () => {
 						</tr>
 					))}
 				</tbody>
-			</Table>
-
-			{/* Modal d'ajout */}
-			<Modal show={showAddModal} onHide={() => setShowAddModal(false)}>
-				<Modal.Header closeButton>
+			    </Table>
+                </Tab>
+                <Tab eventKey="groups" title="Groupes">
+                {/* Nouvelle section pour les groupes */}
+                <Groupe />
+                </Tab>
+            </Tabs>
+            {/* Modal d'ajout */}
+            <Modal
+  show={showAddModal}
+  onHide={() => setShowAddModal(false)}
+  style={{ zIndex: 1050 }}
+  backdrop="static"
+  centered
+>
+<Modal.Header closeButton>
 					<Modal.Title>Ajouter un utilisateur</Modal.Title>
 				</Modal.Header>
 				<Modal.Body>
@@ -213,10 +247,12 @@ const AdminUsers = () => {
 						Enregistrer
 					</Button>
 				</Modal.Footer>
-			</Modal>
+			    </Modal>
 
-			{/* Modal de modification */}
-			<Modal show={showEditModal} onHide={() => setShowEditModal(false)}>
+			    {/* Modal de modification */}
+			    <Modal show={showEditModal} onHide={() => setShowEditModal(false)} style={{ zIndex: 1050 }}
+  backdrop="static"
+  centered>
 				<Modal.Header closeButton>
 					<Modal.Title>Modifier l'utilisateur</Modal.Title>
 				</Modal.Header>
@@ -273,26 +309,26 @@ const AdminUsers = () => {
 						Modifier
 					</Button>
 				</Modal.Footer>
-			</Modal>
+			    </Modal>
 
-            <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered>
-  <Modal.Header closeButton>
-    <Modal.Title>Confirmation de suppression</Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    Êtes-vous sûr de vouloir supprimer l'utilisateur :
-    <strong> {userToDelete?.name} {userToDelete?.prenom}</strong> ?
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
-      Annuler
-    </Button>
-    <Button variant="danger" onClick={handleDeleteUser}>
-      Oui, supprimer
-    </Button>
-  </Modal.Footer>
-</Modal>
-
+                <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} centered style={{ zIndex: 1050 }}
+  backdrop="static">
+                <Modal.Header closeButton>
+                    <Modal.Title>Confirmation de suppression</Modal.Title>
+                </Modal.Header>
+                <Modal.Body>
+                    Êtes-vous sûr de vouloir supprimer l'utilisateur :
+                    <strong> {userToDelete?.name} {userToDelete?.prenom}</strong> ?
+                </Modal.Body>
+                <Modal.Footer>
+                    <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+                    Annuler
+                    </Button>
+                    <Button variant="danger" onClick={handleDeleteUser}>
+                    Oui, supprimer
+                    </Button>
+                </Modal.Footer>
+                </Modal>
 		</div>
 	);
 };

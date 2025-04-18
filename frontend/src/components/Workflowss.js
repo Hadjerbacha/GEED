@@ -265,7 +265,7 @@ const Workflowss = () => {
   };
   
   return (
-    <div className="container-fluid mt-4">
+    <div className="container-fluid">
       <Navbar />
       <br/>
       <Chatbot /> 
@@ -348,7 +348,9 @@ const Workflowss = () => {
       </Pagination>
 
       {/* MODAL */}
-      <Modal show={showModal} onHide={closeModal}>
+      <Modal show={showModal} onHide={closeModal}  style={{ zIndex: 1050 }}
+  backdrop="static"
+  centered>
         <Modal.Header closeButton>
           <Modal.Title>{editingTask ? 'Modifier Tâche' : 'Nouvelle Tâche'}</Modal.Title>
         </Modal.Header>

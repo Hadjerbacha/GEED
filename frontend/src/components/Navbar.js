@@ -112,7 +112,7 @@ const Navbar = () => {
   return (
     <IconContext.Provider value={{ color: '#000' }}>
       <div className="navbar">
-        <div className="d-flex justify-content-between align-items-center w-100 px-3">
+      <div className="navbar-content">
           <Link to="#" className="menu-bars">
             <FaIcons.FaBars onClick={showSidebar} />
           </Link>
