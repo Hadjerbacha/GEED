@@ -115,7 +115,7 @@ const AdminUsers = () => {
 	
 
 	return (
-		<div className="container-fluid">
+		<div>
 			<Navbar />
 
             <style>
@@ -133,15 +133,17 @@ const AdminUsers = () => {
   }
 `}
 </style>
+<div className="m-4">
 
-
-                <Tabs defaultActiveKey="users" id="admin-tabs" className="mb-3 custom-tabs">
+                <Tabs defaultActiveKey="users" id="admin-tabs" className="custom-tabs">
                 <Tab eventKey="users" title="Utilisateurs">
                 {/* Section des utilisateurs ici (déjà existante) */}
+                <br/>
                 <Button variant="success" onClick={() => setShowAddModal(true)}>
 				Ajouter un utilisateur
 			    </Button>
-                <Table striped bordered hover className="mt-3">
+                <br/><br/>
+                <Table striped bordered hover>
 				<thead>
 					<tr>
 						<th>Nom</th>
@@ -180,6 +182,7 @@ const AdminUsers = () => {
                 <Groupe />
                 </Tab>
             </Tabs>
+            </div>
             {/* Modal d'ajout */}
             <Modal
   show={showAddModal}

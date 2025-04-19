@@ -6,6 +6,7 @@ import Navbar from './Navbar';
 import Chatbot from './chatbot';
 import OverdueAlert from './Alerts';
 import {jwtDecode} from 'jwt-decode';
+import './Details';
 
 const Workflowss = () => {
   const [tasks, setTasks] = useState([]);
@@ -265,11 +266,11 @@ const Workflowss = () => {
   };
   
   return (
-    <div className="container-fluid">
+    <div className="container-fluid g-0">
       <Navbar />
       <br/>
       <Chatbot /> 
-      <div className="d-flex justify-content-between align-items-center mb-3">
+      <div className="d-flex justify-content-between align-items-center m-4">
         <Button onClick={() => openModal(null)}>Nouvelle Tâche</Button>
         <Form.Control
           type="text"
@@ -279,63 +280,66 @@ const Workflowss = () => {
         />
       </div>
       <br/> 
-      <OverdueAlert tasks={tasks} />
-      <br/>
-      <Table striped bordered hover responsive>
-        <thead>
-          <tr>
-            <th>Titre</th>
-            <th>Description</th>
-            <th>Échéance</th>
-            <th>Priorité</th>
-            <th>Fichier</th>
-            <th>Statut</th>
-            <th>Assignée à</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {currentTasks.map(task => (
-            <tr key={task.id}>
-              <td>{task.title}</td>
-              <td>{task.description}</td>
-              <td>{new Date(task.due_date).toLocaleDateString()}</td>
-              <td>{task.priority}</td>
-              <td>
-                {task.file_path && (
-                  <a href={`http://localhost:5000${task.file_path}`} target="_blank" rel="noreferrer">Voir</a>
-                )}
-              </td>
-              <td>
-  <select
-    value={task.status}
-    className={`form-select form-select-sm bg-${getStatusColor(task.status)} text-white`}
-    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-  >
-    <option value="pending" className="text-dark">⏳ En attente</option>
-    <option value="assigned" className="text-dark">📌 Assignée</option>
-    <option value="in_progress" className="text-dark">🔧 En cours</option>
-    <option value="completed" className="text-dark">✅ Terminée</option>
-  </select>
-</td>
+      <OverdueAlert tasks={tasks} className="m-4" />
+      <div className='m-4'>
+          <Table striped bordered hover responsive m-4>
+            <thead>
+              <tr>
+                <th>Titre</th>
+                <th>Description</th>
+                <th>Échéance</th>
+                <th>Priorité</th>
+                <th>Fichier</th>
+                <th>Statut</th>
+                <th>Assignée à</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentTasks.map(task => (
+                <tr key={task.id}>
+                  <td>{task.title}</td>
+                  <td>{task.description}</td>
+                  <td>{new Date(task.due_date).toLocaleDateString()}</td>
+                  <td>{task.priority}</td>
+                  <td>
+                    {task.file_path && (
+                      <a href={`http://localhost:5000${task.file_path}`} target="_blank" rel="noreferrer">Voir</a>
+                    )}
+                  </td>
+                  <td>
+      <select
+        value={task.status}
+        className={`form-select form-select-sm bg-${getStatusColor(task.status)} text-white`}
+        onChange={(e) => handleStatusChange(task.id, e.target.value)}
+      >
+        <option value="pending" className="text-dark">⏳ En attente</option>
+        <option value="assigned" className="text-dark">📌 Assignée</option>
+        <option value="in_progress" className="text-dark">🔧 En cours</option>
+        <option value="completed" className="text-dark">✅ Terminée</option>
+      </select>
+          </td>
 
-<td>
-  {users
-    .filter(u => task.assigned_to?.includes(u.value))
-    .map(u => u.label)
-    .join(', ')}
-</td>
+          <td>
+            {users
+              .filter(u => task.assigned_to?.includes(u.value))
+              .map(u => u.label)
+              .join(', ')}
+          </td>
 
-              <td>
-                <Button size="sm" variant="warning" onClick={() => openModal(task)}>Modifier</Button>{' '}
-                <Button size="sm" variant="danger" onClick={() => handleDelete(task.id)}>Supprimer</Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
+                  <td>
+                    <Button size="sm" variant="warning" onClick={() => openModal(task)}>Modifier</Button>{' '}
+                    <Button size="sm" variant="danger" onClick={() => handleDelete(task.id)}>Supprimer</Button>{' '}
+                    <Button size="sm" variant="info" onClick={() => window.location.href = `./details/${task.id}`}>Détails</Button>
 
-      <Pagination  style={{ zIndex: 100, position: "relative" }}>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+      </div>
+<div className='m-4'>
+      <Pagination  m-4 style={{ zIndex: 100, position: "relative"}}>
         {Array.from({ length: Math.ceil(filteredTasks.length / tasksPerPage) }, (_, idx) => (
           <Pagination.Item
             key={idx + 1}
@@ -346,9 +350,9 @@ const Workflowss = () => {
           </Pagination.Item>
         ))}
       </Pagination>
-
+      </div>
       {/* MODAL */}
-      <Modal show={showModal} onHide={closeModal}  style={{ zIndex: 1050 }}
+      <Modal show={showModal} onHide={closeModal}  style={{ zIndex: 1050, width: '100%' }}
   backdrop="static"
   centered>
         <Modal.Header closeButton>

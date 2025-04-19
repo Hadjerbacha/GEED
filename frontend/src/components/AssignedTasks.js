@@ -182,10 +182,10 @@ const AssignedTasks = () => {
 
   
   return (
-    <div className="container-fluid">
+    <div>
       <Navbar />
 
-      <div className="d-flex justify-content-end align-items-center mb-3">
+      <div className="d-flex justify-content-end align-items-center m-4">
   <Form.Control
     type="text"
     placeholder="Rechercher..."
@@ -194,7 +194,7 @@ const AssignedTasks = () => {
   />
 </div>
 
-      <div className="row mb-4">
+      <div className="row m-4">
   <div className="col-md-3">
     <div className="card text-white bg-success shadow">
       <div className="card-body">
@@ -232,9 +232,9 @@ const AssignedTasks = () => {
       {error && <p className="text-danger">{error}</p>}
 
       {tasks.length === 0 ? (
-        <p>Aucune tâche assignée.</p>
+        <p className='m-4'>Aucune tâche assignée.</p>
       ) : (
-        <Table striped bordered hover>
+        <Table striped bordered hover m-4>
           <thead>
             <tr>
               <th>Titre</th>
@@ -311,6 +311,7 @@ const AssignedTasks = () => {
       )}
 
         {/* Pagination */}
+         <div className="m-4">   
         <Pagination>
                 {Array.from({ length: Math.ceil(filteredTasks.length / tasksPerPage) }, (_, idx) => (
                 <Pagination.Item
@@ -322,7 +323,7 @@ const AssignedTasks = () => {
                 </Pagination.Item>
                 ))}
             </Pagination>
-
+</div>
       <Modal show={showModal} onHide={handleCloseModal}  style={{ zIndex: 1050 }}
   backdrop="static"
   centered>

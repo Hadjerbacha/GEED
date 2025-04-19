@@ -9,10 +9,11 @@ import Doc from './components/Document';
 import AdminUsers from './components/AdminUsers';
 import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
 import AssignedTasks from './components/AssignedTasks';
+import Details from './components/Details';
 function App() {
   return (
     <Router>
-      <Container className="mt-4">
+     <Container fluid style={{ minHeight: '100vh' }} className="g-0">
         <Routes>
           {/* Route non protégée */}
           <Route path="/" element={<Login />} />
@@ -22,6 +23,7 @@ function App() {
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
+          <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
         </Routes>
       </Container>
     </Router>
