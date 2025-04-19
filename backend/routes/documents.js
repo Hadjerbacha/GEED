@@ -88,10 +88,16 @@ async function initializeDatabase() {
   }
 }
 
-// GET : récupérer tous les documents
+// GET : récupérer tous les documents avec leurs informations de collection si elles existent
 router.get('/', auth, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM documents ORDER BY date DESC`);
+    const result = await pool.query(`
+      SELECT d.*, dc.is_saved, dc.collection_name
+      FROM documents d
+      LEFT JOIN document_collections dc ON dc.document_id = d.id
+      ORDER BY d.date DESC
+    `);
+
     res.status(200).json(result.rows);
   } catch (err) {
     console.error('Erreur:', err.stack);
