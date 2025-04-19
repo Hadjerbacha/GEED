@@ -91,8 +91,8 @@ const Navbar = () => {
       icon: <FaIcons.FaUserCheck />,
     },
     {
-      title: 'Tableau de bord',
-      path: '/mes-taches',
+      title: 'Tableau de bord / test doc',
+      path: '/documents',
       icon: <FaIcons.FaChartBar />,
     },
     {
