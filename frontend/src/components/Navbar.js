@@ -81,12 +81,12 @@ const Navbar = () => {
       icon: <FaIcons.FaTasks />,
     },*/
     {
-      title: 'Tâches créées par moi',
+      title: 'Tâches créées par vous',
       path: '/workflows',
       icon: <FaIcons.FaClipboardList />,
     },
     {
-      title: 'Tâches assignées à moi',
+      title: 'Tâches assignées à vous',
       path: '/mes-taches',
       icon: <FaIcons.FaUserCheck />,
     },

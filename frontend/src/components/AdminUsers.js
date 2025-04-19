@@ -143,7 +143,7 @@ const AdminUsers = () => {
 				Ajouter un utilisateur
 			    </Button>
                 <br/><br/>
-                <Table striped bordered hover>
+                <Table striped bordered hover responsive>
 				<thead>
 					<tr>
 						<th>Nom</th>

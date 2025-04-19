@@ -264,6 +264,51 @@ const Workflowss = () => {
       alert("Impossible de changer le statut !");
     }
   };
+
+  const [groups, setGroups] = useState([]);
+
+  const fetchGroups = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await axios.get('http://localhost:5000/api/groups/', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      setGroups(res.data);
+    } catch (err) {
+      console.error("Erreur chargement des groupes", err);
+    }
+  };
+  
+
+useEffect(() => {
+  fetchGroups();
+}, []);
+
+  const userOptions = users.map(user => ({
+    label: user.label,
+    value: user.value,
+    type: 'user'
+  }));
+  
+  const groupOptions = groups.map(group => ({
+    label: group.nom,
+    value: group.id,
+    type: 'group'
+  }));
+  
+  const groupedOptions = [
+    {
+      label: 'Utilisateurs',
+      options: userOptions
+    },
+    {
+      label: 'Groupes',
+      options: groupOptions
+    }
+  ];
+  
   
   return (
     <div className="container-fluid g-0">
@@ -389,14 +434,20 @@ const Workflowss = () => {
               </Form.Select>
             </Form.Group>
             <Form.Group>
-              <Form.Label>Assigner à</Form.Label>
-              <Select
-                isMulti
-                options={users}
-                value={users.filter(u => formData.assigned_to.includes(u.value))}
-                onChange={handleSelectChange}
-              />
-            </Form.Group>
+  <Form.Label>Assigner à</Form.Label>
+  <Select
+    isMulti
+    options={groupedOptions}
+    value={groupedOptions
+      .flatMap(group => group.options)
+      .filter(option => formData.assigned_to.includes(option.value))}
+    onChange={(selectedOptions) => {
+      const selectedValues = selectedOptions.map(opt => opt.value);
+      setFormData(prev => ({ ...prev, assigned_to: selectedValues }));
+    }}
+  />
+</Form.Group>
+
             <Form.Group>
   <Form.Label>Fichier</Form.Label>
   <Form.Control type="file" name="file" onChange={handleInputChange} />

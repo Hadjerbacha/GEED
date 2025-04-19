@@ -175,6 +175,7 @@ const Details = () => {
               <p><strong>Assignée à :</strong> {task.assigned_to ? task.assigned_to.name : "Non assignée"}</p>
               <p><strong>Assignée par :</strong> {task.assigned_by ? task.assigned_by.name : "Non assignée"}</p>
               <p><strong>Date de création :</strong> {new Date(task.created_at).toLocaleString()}</p>
+              <p><strong>Notes :</strong> {task.assignment_note ? task.assignment_note : "Aucune note"}</p>
             </div>
           </div>
         </div>
