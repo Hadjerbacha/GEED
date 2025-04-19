@@ -636,7 +636,76 @@
 .button-oui:hover {
   opacity: 0.9;
 }
-
 .button-non:hover {
   opacity: 0.9;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.modal-collection {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  margin: 0 auto;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.modal-collection h2 {
+  margin-bottom: 1.5rem;
+  font-size: 1.4rem;
+  color: #175985;
+  text-align: center;
+}
+
+.modal-collection select,
+.modal-collection input {
+  width: 100%;
+  padding: 0.6rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ced4da;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+}
+
+.modal-collection select:focus,
+.modal-collection input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.2);
+}
+
+.modal-collection .buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.modal-collection button {
+  background: linear-gradient(to right, #3498db, #175985);
+  color: white;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.modal-collection button:hover {
+  background: linear-gradient(to right, #2980b9, #12496e);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.modal-collection button:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
