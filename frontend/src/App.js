@@ -6,6 +6,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import Workflows from './components/Workflowss';
 import Groupe from './components/Groupe';
 import Doc from './components/Document';
+import Document from './components/Doc';
 import AdminUsers from './components/AdminUsers';
 import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
 import AssignedTasks from './components/AssignedTasks';
@@ -21,6 +22,7 @@ function App() {
           <Route path="/groupe" element={<ProtectedRoute element={<Groupe />} />} />
           <Route path="/AdminUsers" element={<ProtectedRoute element={<AdminUsers />} />} />
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
+          <Route path="/documents" element={<ProtectedRoute element={<Document />} />} />
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
           <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />

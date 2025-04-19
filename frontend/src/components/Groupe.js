@@ -125,7 +125,7 @@ const Groupe = () => {
         Ajouter Groupe
       </Button>
 
-      <Table striped bordered hover>
+      <Table striped bordered hover responsive>
         <thead>
           <tr>
             <th>Nom</th>

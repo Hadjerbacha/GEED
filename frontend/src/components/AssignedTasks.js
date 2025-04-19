@@ -234,7 +234,8 @@ const AssignedTasks = () => {
       {tasks.length === 0 ? (
         <p className='m-4'>Aucune tâche assignée.</p>
       ) : (
-        <Table striped bordered hover m-4>
+        <div className="m-4">
+        <Table striped bordered hover responsive>
           <thead>
             <tr>
               <th>Titre</th>
@@ -245,7 +246,7 @@ const AssignedTasks = () => {
               <th>Statut</th>
               <th>D'après</th>
               <th>Fichier</th>
-              <th>💬 Commentaire</th>
+              <th>Note</th>
 
             </tr>
           </thead>
@@ -308,6 +309,7 @@ const AssignedTasks = () => {
             ))}
           </tbody>
         </Table>
+        </div>
       )}
 
         {/* Pagination */}
@@ -328,18 +330,18 @@ const AssignedTasks = () => {
   backdrop="static"
   centered>
         <Modal.Header closeButton>
-            <Modal.Title>💬 Commentaire sur la tâche</Modal.Title>
+            <Modal.Title>💬 Note sur la tâche</Modal.Title>
         </Modal.Header>
         <Modal.Body>
             <Form>
             <Form.Group controlId="commentTextArea">
-                <Form.Label>Commentaire</Form.Label>
+                <Form.Label>Note</Form.Label>
                 <Form.Control
                 as="textarea"
                 rows={4}
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
-                placeholder="Ajoutez un commentaire ici..."
+                placeholder="Ajoutez une note ici..."
                 />
             </Form.Group>
             </Form>
