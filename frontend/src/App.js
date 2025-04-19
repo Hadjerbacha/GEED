@@ -1,22 +1,29 @@
 import React from 'react';
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
-import { Container } from 'react-bootstrap'; // On garde la mise en page
+import { Container } from 'react-bootstrap'; // Pour la mise en page
 import Login from './components/Login';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Workflows from './components/Workflowss';
-import Register from './components/Register';
+import Groupe from './components/Groupe';
 import Doc from './components/Document';
-import Chat from './components/chat';
+import AdminUsers from './components/AdminUsers';
+import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
+import AssignedTasks from './components/AssignedTasks';
+import Details from './components/Details';
 function App() {
   return (
     <Router>
-      <Container className="mt-4">
+     <Container fluid style={{ minHeight: '100vh' }} className="g-0">
         <Routes>
+          {/* Route non protégée */}
           <Route path="/" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/document" element={<Doc />} />
-          <Route path="/workflows" element={<Workflows />} />
-          <Route path="/chat" element={<Chat />} />
+          {/* Routes protégées */}
+          <Route path="/groupe" element={<ProtectedRoute element={<Groupe />} />} />
+          <Route path="/AdminUsers" element={<ProtectedRoute element={<AdminUsers />} />} />
+          <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
+          <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
+          <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
+          <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
         </Routes>
       </Container>
     </Router>

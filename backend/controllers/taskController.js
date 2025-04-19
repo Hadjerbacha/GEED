@@ -1,32 +1,38 @@
 // controllers/taskController.js
 const nodemailer = require('nodemailer');
-const User = require('../models/UserMoel'); // modèle des utilisateurs
+
 
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'votre.email@gmail.com',
-    pass: 'votre_mot_de_passe_app'
+    user: 'hadjerbachasais@gmail.com',
+    pass: 'ieku nqme btfp xopo'
   }
 });
 
-const sendNotification = async (assignedUserIds, task, creatorName) => {
-  const users = await User.findAll({ where: { id: assignedUserIds } });
+const sendEmail = (to, { subject, text }) => {
+  return transporter.sendMail({
+    from: '"GED App" <tonemail@gmail.com>',
+    to,
+    subject,
+    text
+  });
+};
 
-  for (const user of users) {
-    await transporter.sendMail({
-      from: '"GED System" <votre.email@gmail.com>',
-      to: user.email,
-      subject: `Nouvelle tâche assignée : ${task.title}`,
-      html: `
-        <p>Bonjour ${user.name},</p>
-        <p><strong>${creatorName}</strong> vous a assigné une tâche.</p>
-        <p><strong>Titre :</strong> ${task.title}</p>
-        <p><strong>Description :</strong> ${task.description}</p>
-        <p><strong>Échéance :</strong> ${task.due_date}</p>
-        <p>Veuillez vous connecter au système GED pour plus de détails.</p>
-      `
-    });
+
+const getUserTasks = async (req, res) => {
+  try {
+    const userId = req.user.id; // ID du user connecté
+    const result = await pool.query(
+      'SELECT * FROM tasks WHERE created_by = $1',
+      [userId]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: 'Erreur serveur' });
   }
 };
+
+module.exports = { sendEmail, getUserTasks };
