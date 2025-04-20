@@ -11,6 +11,7 @@ import AdminUsers from './components/AdminUsers';
 import ProtectedRoute from './ProtectedRoute'; // Importer le composant ProtectedRoute
 import AssignedTasks from './components/AssignedTasks';
 import Details from './components/Details';
+import Register from './components/Register';
 function App() {
   return (
     <Router>
@@ -26,6 +27,7 @@ function App() {
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
           <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
+          <Route path="/register" element={<ProtectedRoute element={<Register />} />} />
         </Routes>
       </Container>
     </Router>
