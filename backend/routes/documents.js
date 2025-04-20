@@ -88,15 +88,22 @@ async function initializeDatabase() {
   }
 }
 
-// GET : récupérer tous les documents avec leurs informations de collection si elles existent
+// GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
+  const userId = req.user.id; // récupéré depuis le token
+
   try {
-    const result = await pool.query(`
+    const result = await pool.query(
+      `
       SELECT d.*, dc.is_saved, dc.collection_name
       FROM documents d
+      JOIN document_permissions dp ON dp.document_id = d.id
       LEFT JOIN document_collections dc ON dc.document_id = d.id
+      WHERE dp.user_id = $1 AND dp.access_type = 'read'
       ORDER BY d.date DESC
-    `);
+      `,
+      [userId]
+    );
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -104,6 +111,7 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
+
 
 // POST : ajouter un document avec OCR
 router.post('/', auth, upload.single('file'), async (req, res) => {
