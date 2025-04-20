@@ -112,10 +112,9 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-
-// POST : ajouter un document avec OCR
+//upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name } = req.body;
+  const { name, access, allowedUsers } = req.body;
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -141,18 +140,44 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     const category = classifyText(extractedText);
 
-    const query = `
-      INSERT INTO documents (name, file_path, category, text_content)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *;
+    const insertDocQuery = `
+     INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility)
+  VALUES ($1, $2, $3, $4, $5, $6)
+  RETURNING *;
     `;
-    const values = [name, file_path, category, extractedText];
+    const docValues = [name, file_path, category, extractedText, req.user.id, access]; 
+    const result = await pool.query(insertDocQuery, docValues);
+    const documentId = result.rows[0].id;
 
-    const result = await pool.query(query, values);
+    // 🔐 Gérer les permissions
+    if (access === 'public') {
+      const allUsers = await pool.query('SELECT id FROM users');
+      const insertPromises = allUsers.rows.map(user =>
+        pool.query(
+          'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
+          [user.id, documentId, 'read']
+        )
+      );
+      await Promise.all(insertPromises);
+    } else if (access === 'custom' && Array.isArray(allowedUsers)) {
+      const insertPromises = allowedUsers.map(userId =>
+        pool.query(
+          'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
+          [userId, documentId, 'read']
+        )
+      );
+      await Promise.all(insertPromises);
+    } else if (access === 'private') {
+      await pool.query(
+        'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
+        [req.user.id, documentId, 'owner']
+      );
+    }
 
     res.status(201).json({
       ...result.rows[0],
-      preview: extractedText.slice(0, 300) + '...'
+      preview: extractedText.slice(0, 300) + '...',
+      permissions: access
     });
   } catch (err) {
     console.error('Erreur:', err.stack);

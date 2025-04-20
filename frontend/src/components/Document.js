@@ -24,6 +24,11 @@ const Document = () => {
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [selectedExistingCollection, setSelectedExistingCollection] = useState('');
 
+  ///upload
+  const [accessType, setAccessType] = useState('private');
+  const [allowedUsers, setAllowedUsers] = useState([]); // pour les users spécifiques
+
+
   // Conflit de version
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
@@ -171,6 +176,8 @@ const Document = () => {
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
     formData.append('category', category);
+    formData.append('visibility', accessType);
+    formData.append('access', accessType);
     formData.append('collectionName', collectionName);
     if (forceUpload) formData.append('isNewVersion', 'true');
 
@@ -198,6 +205,7 @@ const Document = () => {
     }
   };
   //version document
+  
   
 
   // Sauvegarde collection
@@ -361,6 +369,14 @@ const Document = () => {
             <option value="mémoire">Mémoire</option>
             <option value="autre">Autre</option>
           </select>
+          <div>
+  <select id="access" value={accessType} onChange={(e) => setAccessType(e.target.value)}>
+    <option value="private">Privé</option>
+    <option value="public">Tous les utilisateurs</option>
+    <option value="custom">Utilisateurs spécifiques</option>
+  </select>
+</div>
+
           <button onClick={handleUpload}>Uploader</button>
 
           {/* Bloc confirmation conflit de version */}
