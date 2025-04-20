@@ -640,6 +640,21 @@
   opacity: 0.9;
 }
 
+.user-button {
+  margin-right: 10px;
+  padding: 5px 10px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.user-button:hover {
+  background-color: #0056b3;
+}
+
+
 .hidden {
   display: none !important;
 }

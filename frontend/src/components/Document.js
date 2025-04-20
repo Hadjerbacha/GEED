@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import './DocumentManagementPage.css';
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
+import { Link, useNavigate } from 'react-router-dom';
+import Dropdown from 'react-bootstrap/Dropdown';
+import * as FaIcons from 'react-icons/fa';
+import * as AiIcons from 'react-icons/ai';
 
 const Document = () => {
   const [documents, setDocuments] = useState([]);
@@ -23,9 +28,71 @@ const Document = () => {
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
   const [forceUpload, setForceUpload] = useState(false);
+   const navigate = useNavigate();
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate('/');
+  };
 
+  //////
+  
+
+
+  //navbar
+  const [sidebar, setSidebar] = useState(false);
+    const [users, setUsers] = useState([]);
+    const [userId, setUserId] = useState("");
+    const [currentUser, setCurrentUser] = useState(null);
+   
   const token = localStorage.getItem('token');
 
+  const showSidebar = () => setSidebar(!sidebar);
+  const sidebarItems = [
+      {
+        title: 'Accueil',
+        path: '/',
+        icon: <AiIcons.AiFillHome />,
+      },
+      currentUser?.role === 'admin' && {
+        title: 'Ajouter utilisateur',
+        path: '/AdminUsers',
+        icon: <FaIcons.FaUserPlus />,
+      },
+      
+      {
+        title: 'Documents',
+        path: '/Document',
+        icon: <FaIcons.FaPlus />,
+      },
+      /*{
+        title: 'Workflows',
+        path: '/workflows',
+        icon: <FaIcons.FaTasks />,
+      },*/
+      {
+        title: 'Tâches créées par vous',
+        path: '/workflows',
+        icon: <FaIcons.FaClipboardList />,
+      },
+      {
+        title: 'Tâches assignées à vous',
+        path: '/mes-taches',
+        icon: <FaIcons.FaUserCheck />,
+      },
+      {
+        title: 'Tableau de bord / test doc',
+        path: '/documents',
+        icon: <FaIcons.FaChartBar />,
+      },
+      {
+        title: 'Archive',
+        path: currentUser?.role === 'admin' ? '/archive' : '/archiveUser',
+        icon: <FaIcons.FaArchive />,
+      },
+    ];
+  
+
+    
   // Fetch documents
   const fetchDocuments = async () => {
     try {
@@ -176,6 +243,44 @@ const Document = () => {
     );
   };
 
+  const [username, setUsername] = useState('');
+
+    // Décoder JWT pour récupérer userId
+    useEffect(() => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        const decoded = jwtDecode(token);
+        console.log("Token décodé:", decoded);
+        setUserId(decoded.id); // ici tu fixes le problème
+      }
+    }, []);
+    
+    
+  
+    // Récupérer la liste des utilisateurs
+    useEffect(() => {
+      fetch('http://localhost:5000/api/auth/users')
+        .then(res => res.json())
+        .then(data => setUsers(data))
+        .catch(err => console.error('Erreur chargement utilisateurs :', err));
+    }, []);
+  
+    // Associer userId au user courant
+    useEffect(() => {
+      if (userId && users.length > 0) {
+        const found = users.find(u => u.id === userId);
+        if (found) setCurrentUser(found);
+      }
+    }, [userId, users]);
+  
+    useEffect(() => {
+      if (currentUser) {
+        console.log("Utilisateur connecté :", currentUser);
+      }
+    }, [currentUser]);
+
+
+
   // Filter documents
   const filteredDocuments = documents.filter(doc => {
     const docName = doc.name || '';
@@ -196,6 +301,22 @@ const Document = () => {
     <div className="container">
       <div className="content">
         <h1>Gestion des Documents</h1>
+        {currentUser ? (
+  <Dropdown>
+    <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
+      {currentUser.name} {currentUser.prenom}
+    </Dropdown.Toggle>
+
+    <Dropdown.Menu>
+      <Dropdown.Item href="/help">Aide</Dropdown.Item>
+      <Dropdown.Divider />
+      <Dropdown.Item onClick={handleLogout} className="text-danger">
+        Déconnexion
+      </Dropdown.Item>
+    </Dropdown.Menu>
+  </Dropdown>) : (
+  <div className="text-danger">Aucun utilisateur connecté</div>
+)}
         <div className="controls">
           <input
             type="text"
@@ -348,5 +469,6 @@ const Document = () => {
     </div>
   );
 };
+
 
 export default Document;
