@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import './FolderManagementPage.css';
-import Navbar from './Navbar';
 import axios from 'axios';
-
+import { jwtDecode } from 'jwt-decode';
+import { Link, useNavigate } from 'react-router-dom';
+import Dropdown from 'react-bootstrap/Dropdown';
+import * as FaIcons from 'react-icons/fa';
+import * as AiIcons from 'react-icons/ai';
+ 
 
 const FolderManagementPage = () => {
   const [folders, setFolders] = useState([]);
@@ -11,6 +15,8 @@ const FolderManagementPage = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  
+  const navigate = useNavigate();
   useEffect(() => {
     // Charger les dossiers existants lors du chargement de la page
     axios.get('/api/folders')
@@ -64,7 +70,13 @@ const FolderManagementPage = () => {
     <div className="folder-management-page">
       <div className="header">
         <h1>Folders</h1>
-        
+        <button 
+      className="bg-green-600 text-black px-4 py-2 rounded hover:bg-green-700 transition"
+      onClick={() => navigate('/Document')}
+    >
+      Voir les fichiers
+    </button>
+
       </div>
 
       <div className="controls">

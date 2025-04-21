@@ -726,17 +726,23 @@
 }
 
 
+
 .file-label {
-  background-color: #007bff;
+  background: linear-gradient(to right, #3498db, #175985);
   color: white;
   padding: 8px 14px;
+  border : none ;
   border-radius: 8px;
   cursor: pointer;
   display: inline-block;
   transition: background-color 0.3s ease;
 }
 
-.file-label.uploaded {
-  background-color: #28a745; /* vert succès */
+.file-label.uploaded :hover {
+  background: linear-gradient(to right, #2980b9, #12496e);
   color: #fff;
+  background: linear-gradient(to right, #2980b9, #12496e);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+
 }

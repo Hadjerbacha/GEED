@@ -126,6 +126,10 @@ const Document = () => {
   useEffect(() => { fetchDocuments(); }, [token]);
 
   // Consultation
+  const [selectedDoc, setSelectedDoc] = useState(null);
+const [showModal, setShowModal] = useState(false);
+const [showDetails, setShowDetails] = useState(false);
+
   const consultDocument = url => {
     window.open(`http://localhost:5000${url}`, '_blank');
   };
@@ -309,6 +313,13 @@ const Document = () => {
     <div className="container">
       <div className="content">
         <h1>Gestion des Documents</h1>
+        <button 
+      className="file-label"
+      onClick={() => navigate('/folder')}
+    >
+      Aller aux dossiers
+    </button>
+
         {currentUser ? (
   <Dropdown>
     <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
@@ -410,9 +421,9 @@ const Document = () => {
 
         {isSavingCollection && savedDocuments.length > 0 && (
           <div className="saved-collection">
-            <h3>📁 Ma Collection</h3>
+            <h3>📁 Mon dossier</h3>
             <select value={selectedExistingCollection} onChange={e => setSelectedExistingCollection(e.target.value)}>
-              <option value="">Choisir une collection existante</option>
+              <option value="">Choisir un dossier existant</option>
               {collections.map(col => (
                 <option key={col} value={col}>
                   {col}
@@ -425,7 +436,7 @@ const Document = () => {
               value={collectionName}
               onChange={e => setCollectionName(e.target.value)}
             />
-            <button onClick={saveCollection}>Sauvegarder dans la collection</button>
+            <button onClick={saveCollection}>Sauvegarder</button>
             <ul>
               {savedDocuments.map(doc => (
                 <li key={doc.id}>
@@ -441,7 +452,8 @@ const Document = () => {
           <thead>
             <tr>
               <th>Document</th>
-              <th>Date</th>
+              <th></th>
+              <th>Date de creation</th>
               <th>Catégorie</th>
               <th>Actions</th>
             </tr>
@@ -453,14 +465,30 @@ const Document = () => {
                  <td>
                      {highlightMatch(doc.name, searchQuery)}{' '}
                      {doc.version ? `(version ${doc.version})` : ''}
+                  
                         </td>
+                        <td>  <button
+  onClick={() => {
+    window.open(`http://localhost:5000${selectedDoc.file_path}`, '_blank');
+    setShowModal(false);
+  }}
+  className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+  style={{ all: 'unset', cursor: 'pointer' }}
+>
+  📄
+</button>
+</td>
 
                   <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Date inconnue'}</td>
                   <td>{doc.category || 'Non spécifié'}</td>
                   <td className="actions">
-                    <button className="button" onClick={() => consultDocument(doc.file_path)}>
-                      Consulter
-                    </button>
+                  <button className="button" onClick={() => {
+  setSelectedDoc(doc);
+  setShowModal(true);
+  setShowDetails(false);
+}}>
+  Details
+</button>
                     <button className="button-sup" onClick={() => handleDelete(doc.id)}>
                       Supprimer
                     </button>
@@ -468,6 +496,9 @@ const Document = () => {
                       {savedDocuments.some(saved => saved.id === doc.id)
                         ? 'Retirer de la collection'
                         : 'Save'}
+                    </button>
+                    <button className="button-share" >
+                      share
                     </button>
                   </td>
                 </tr>
@@ -481,6 +512,7 @@ const Document = () => {
             )}
           </tbody>
         </table>
+        
       </div>
     </div>
   );
