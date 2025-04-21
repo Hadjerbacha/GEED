@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Navbar from './Navbar'; // Assurez-vous d'avoir un composant Navbar
+import { useNavigate } from 'react-router-dom';
+
 
 const Doc = () => {
   const [documents, setDocuments] = useState([]);
@@ -26,6 +28,9 @@ const Doc = () => {
   const [forceUpload, setForceUpload] = useState(false);
 
   const token = localStorage.getItem('token');
+
+  const navigate = useNavigate();
+
 
   const fetchDocuments = async () => {
     try {
@@ -51,7 +56,14 @@ const Doc = () => {
 
   useEffect(() => { fetchDocuments(); }, [token]);
 
-  const consultDocument = url => window.open(`http://localhost:5000${url}`, '_blank');
+  // Consultation
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  const consultDocument = url => {
+    window.open(`http://localhost:5000${url}`, '_blank');
+  };
 
   const handleDelete = async id => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) return;
@@ -157,6 +169,9 @@ const Doc = () => {
     return matchesType && matchesDate && (matchesSearch || matchesAdvanced);
   });
 
+
+
+
   return (
     <>
       <Navbar />
@@ -216,11 +231,30 @@ const Doc = () => {
           <tbody>
             {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
               <tr key={doc.id}>
-                <td>{doc.name} {doc.version && `(version ${doc.version})`}</td>
+                <td>{doc.name} {doc.version && `(version ${doc.version})`}
+                  <button
+                    onClick={() => {
+                      window.open(`http://localhost:5000${doc.file_path}`, '_blank');
+                      setShowModal(false);
+                    }}
+                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                    style={{ all: 'unset', cursor: 'pointer' }}
+                  >
+                    📄
+                  </button>
+
+
+                </td>
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
-                  <Button size="sm" variant="info" onClick={() => consultDocument(doc.file_path)}>Consulter</Button>{' '}
+                   <Button
+                    size="sm"
+                    variant="info"
+                    onClick={() => navigate(`/documents/${doc.id}`)}
+                  >
+                    Détails
+                  </Button>
                   <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>Supprimer</Button>{' '}
                   <Button size="sm" variant="success" onClick={() => toggleSaveDocument(doc)}>
                     {savedDocuments.some(d => d.id === doc.id) ? 'Retirer' : 'Save'}

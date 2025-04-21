@@ -13,6 +13,7 @@ import AssignedTasks from './components/AssignedTasks';
 import Details from './components/Details';
 import Register from './components/Register';
 import Folder from './components/Folder';
+import DocumentDetails from './components/DocumentDetails';
 function App() {
   return (
     <Router>
@@ -30,6 +31,7 @@ function App() {
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
           <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
           <Route path="/register" element={<ProtectedRoute element={<Register />} />} />
+          <Route path="/Documents/:id" element={<ProtectedRoute element={<DocumentDetails />} />} />
         </Routes>
       </Container>
     </Router>
