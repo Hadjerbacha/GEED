@@ -12,6 +12,7 @@ import ProtectedRoute from './ProtectedRoute'; // Importer le composant Protecte
 import AssignedTasks from './components/AssignedTasks';
 import Details from './components/Details';
 import Register from './components/Register';
+import Folder from './components/Folder';
 function App() {
   return (
     <Router>
@@ -24,6 +25,7 @@ function App() {
           <Route path="/AdminUsers" element={<ProtectedRoute element={<AdminUsers />} />} />
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
           <Route path="/documents" element={<ProtectedRoute element={<Document />} />} />
+          <Route path="/folder" element={<ProtectedRoute element={<Folder/>} />} />      
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
           <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
