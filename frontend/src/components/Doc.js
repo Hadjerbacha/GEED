@@ -22,10 +22,13 @@ const Doc = () => {
   const [collections, setCollections] = useState([]);
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [selectedExistingCollection, setSelectedExistingCollection] = useState('');
+  const [selectedVersion, setSelectedVersion] = useState(null);
+
 
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
   const [forceUpload, setForceUpload] = useState(false);
+
 
   const token = localStorage.getItem('token');
 
@@ -248,13 +251,14 @@ const Doc = () => {
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
-                   <Button
+                  <Button
                     size="sm"
                     variant="info"
                     onClick={() => navigate(`/documents/${doc.id}`)}
                   >
                     Détails
                   </Button>
+
                   <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>Supprimer</Button>{' '}
                   <Button size="sm" variant="success" onClick={() => toggleSaveDocument(doc)}>
                     {savedDocuments.some(d => d.id === doc.id) ? 'Retirer' : 'Save'}
