@@ -640,6 +640,21 @@
   opacity: 0.9;
 }
 
+.user-button {
+  margin-right: 10px;
+  padding: 5px 10px;
+  background-color: #007BFF;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.user-button:hover {
+  background-color: #0056b3;
+}
+
+
 .hidden {
   display: none !important;
 }
@@ -708,4 +723,26 @@
   background-color: #95a5a6;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+
+
+.file-label {
+  background: linear-gradient(to right, #3498db, #175985);
+  color: white;
+  padding: 8px 14px;
+  border : none ;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-block;
+  transition: background-color 0.3s ease;
+}
+
+.file-label.uploaded :hover {
+  background: linear-gradient(to right, #2980b9, #12496e);
+  color: #fff;
+  background: linear-gradient(to right, #2980b9, #12496e);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+
 }

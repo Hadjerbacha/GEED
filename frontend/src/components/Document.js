@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import './DocumentManagementPage.css';
 import axios from 'axios';
+import { jwtDecode } from 'jwt-decode';
+import { Link, useNavigate } from 'react-router-dom';
+import Dropdown from 'react-bootstrap/Dropdown';
+import * as FaIcons from 'react-icons/fa';
+import * as AiIcons from 'react-icons/ai';
 
 const Document = () => {
   const [documents, setDocuments] = useState([]);
@@ -19,12 +24,79 @@ const Document = () => {
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [selectedExistingCollection, setSelectedExistingCollection] = useState('');
 
+  ///upload
+  const [accessType, setAccessType] = useState('private');
+  const [allowedUsers, setAllowedUsers] = useState([]); // pour les users spécifiques
+
+
   // Conflit de version
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
   const [forceUpload, setForceUpload] = useState(false);
+  const navigate = useNavigate();
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate('/');
+  };
+
+  //////
+
+
+
+  //navbar
+  const [sidebar, setSidebar] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [userId, setUserId] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
 
   const token = localStorage.getItem('token');
+
+  const showSidebar = () => setSidebar(!sidebar);
+  const sidebarItems = [
+    {
+      title: 'Accueil',
+      path: '/',
+      icon: <AiIcons.AiFillHome />,
+    },
+    currentUser?.role === 'admin' && {
+      title: 'Ajouter utilisateur',
+      path: '/AdminUsers',
+      icon: <FaIcons.FaUserPlus />,
+    },
+
+    {
+      title: 'Documents',
+      path: '/Document',
+      icon: <FaIcons.FaPlus />,
+    },
+    /*{
+      title: 'Workflows',
+      path: '/workflows',
+      icon: <FaIcons.FaTasks />,
+    },*/
+    {
+      title: 'Tâches créées par vous',
+      path: '/workflows',
+      icon: <FaIcons.FaClipboardList />,
+    },
+    {
+      title: 'Tâches assignées à vous',
+      path: '/mes-taches',
+      icon: <FaIcons.FaUserCheck />,
+    },
+    {
+      title: 'Tableau de bord / test doc',
+      path: '/documents',
+      icon: <FaIcons.FaChartBar />,
+    },
+    {
+      title: 'Archive',
+      path: currentUser?.role === 'admin' ? '/archive' : '/archiveUser',
+      icon: <FaIcons.FaArchive />,
+    },
+  ];
+
+
 
   // Fetch documents
   const fetchDocuments = async () => {
@@ -54,6 +126,10 @@ const Document = () => {
   useEffect(() => { fetchDocuments(); }, [token]);
 
   // Consultation
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
   const consultDocument = url => {
     window.open(`http://localhost:5000${url}`, '_blank');
   };
@@ -104,6 +180,8 @@ const Document = () => {
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
     formData.append('category', category);
+    formData.append('visibility', accessType);
+    formData.append('access', accessType);
     formData.append('collectionName', collectionName);
     if (forceUpload) formData.append('isNewVersion', 'true');
 
@@ -131,7 +209,8 @@ const Document = () => {
     }
   };
   //version document
-  
+
+
 
   // Sauvegarde collection
   const saveCollection = async () => {
@@ -176,6 +255,44 @@ const Document = () => {
     );
   };
 
+  const [username, setUsername] = useState('');
+
+  // Décoder JWT pour récupérer userId
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const decoded = jwtDecode(token);
+      console.log("Token décodé:", decoded);
+      setUserId(decoded.id); // ici tu fixes le problème
+    }
+  }, []);
+
+
+
+  // Récupérer la liste des utilisateurs
+  useEffect(() => {
+    fetch('http://localhost:5000/api/auth/users')
+      .then(res => res.json())
+      .then(data => setUsers(data))
+      .catch(err => console.error('Erreur chargement utilisateurs :', err));
+  }, []);
+
+  // Associer userId au user courant
+  useEffect(() => {
+    if (userId && users.length > 0) {
+      const found = users.find(u => u.id === userId);
+      if (found) setCurrentUser(found);
+    }
+  }, [userId, users]);
+
+  useEffect(() => {
+    if (currentUser) {
+      console.log("Utilisateur connecté :", currentUser);
+    }
+  }, [currentUser]);
+
+
+
   // Filter documents
   const filteredDocuments = documents.filter(doc => {
     const docName = doc.name || '';
@@ -196,6 +313,29 @@ const Document = () => {
     <div className="container">
       <div className="content">
         <h1>Gestion des Documents</h1>
+        <button
+          className="file-label"
+          onClick={() => navigate('/folder')}
+        >
+          Aller aux dossiers
+        </button>
+
+        {currentUser ? (
+          <Dropdown>
+            <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
+              {currentUser.name} {currentUser.prenom}
+            </Dropdown.Toggle>
+
+            <Dropdown.Menu>
+              <Dropdown.Item href="/help">Aide</Dropdown.Item>
+              <Dropdown.Divider />
+              <Dropdown.Item onClick={handleLogout} className="text-danger">
+                Déconnexion
+              </Dropdown.Item>
+            </Dropdown.Menu>
+          </Dropdown>) : (
+          <div className="text-danger">Aucun utilisateur connecté</div>
+        )}
         <div className="controls">
           <input
             type="text"
@@ -240,6 +380,14 @@ const Document = () => {
             <option value="mémoire">Mémoire</option>
             <option value="autre">Autre</option>
           </select>
+          <div>
+            <select id="access" value={accessType} onChange={(e) => setAccessType(e.target.value)}>
+              <option value="private">Privé</option>
+              <option value="public">Tous les utilisateurs</option>
+              <option value="custom">Utilisateurs spécifiques</option>
+            </select>
+          </div>
+
           <button onClick={handleUpload}>Uploader</button>
 
           {/* Bloc confirmation conflit de version */}
@@ -270,12 +418,35 @@ const Document = () => {
             </div>
           )}
         </div>
+        {showModal && selectedDoc && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h2>Détails du document</h2>
+              <p><strong>Nom :</strong> {selectedDoc.name}</p>
+              <p><strong>Catégorie :</strong> {selectedDoc.category}</p>
+              <p><strong>Collection :</strong> {selectedDoc.collectionName || 'Aucune'}</p>
+              <p><strong>Date d’upload :</strong> {new Date(selectedDoc.createdAt).toLocaleString()}</p>
+              <p><strong>Visibilité :</strong> {selectedDoc.visibility}</p>
+              <p><strong>Contenu extrait :</strong></p>
+              <div className="doc-text-content">
+                {selectedDoc.text_content
+                  ? <pre>{selectedDoc.text_content}</pre>
+                  : <em>Pas de contenu extrait disponible</em>}
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn-close" onClick={() => setShowModal(false)}></button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {isSavingCollection && savedDocuments.length > 0 && (
           <div className="saved-collection">
-            <h3>📁 Ma Collection</h3>
+            <h3>📁 Mon dossier</h3>
             <select value={selectedExistingCollection} onChange={e => setSelectedExistingCollection(e.target.value)}>
-              <option value="">Choisir une collection existante</option>
+              <option value="">Choisir un dossier existant</option>
               {collections.map(col => (
                 <option key={col} value={col}>
                   {col}
@@ -288,7 +459,7 @@ const Document = () => {
               value={collectionName}
               onChange={e => setCollectionName(e.target.value)}
             />
-            <button onClick={saveCollection}>Sauvegarder dans la collection</button>
+            <button onClick={saveCollection}>Sauvegarder</button>
             <ul>
               {savedDocuments.map(doc => (
                 <li key={doc.id}>
@@ -304,7 +475,8 @@ const Document = () => {
           <thead>
             <tr>
               <th>Document</th>
-              <th>Date</th>
+              <th></th>
+              <th>Date de creation</th>
               <th>Catégorie</th>
               <th>Actions</th>
             </tr>
@@ -313,17 +485,35 @@ const Document = () => {
             {filteredDocuments.length > 0 ? (
               filteredDocuments.map(doc => (
                 <tr key={doc.id}>
-                 <td>
-                     {highlightMatch(doc.name, searchQuery)}{' '}
-                     {doc.version ? `(version ${doc.version})` : ''}
-                        </td>
+                  <td>
+                    {highlightMatch(doc.name, searchQuery)}{' '}
+                    {doc.version ? `(version ${doc.version})` : ''}
+
+                  </td>
+                  <td>  <button
+                    onClick={() => {
+                      window.open(`http://localhost:5000${selectedDoc.file_path}`, '_blank');
+                      setShowModal(false);
+                    }}
+                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                    style={{ all: 'unset', cursor: 'pointer' }}
+                  >
+                    📄
+                  </button>
+                  </td>
 
                   <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Date inconnue'}</td>
                   <td>{doc.category || 'Non spécifié'}</td>
                   <td className="actions">
-                    <button className="button" onClick={() => consultDocument(doc.file_path)}>
-                      Consulter
+                    <button className="button" onClick={() => {
+                      setSelectedDoc(doc);
+                      setShowModal(true);
+                      setShowDetails(false);
+                    }}>
+                      Details
+
                     </button>
+
                     <button className="button-sup" onClick={() => handleDelete(doc.id)}>
                       Supprimer
                     </button>
@@ -331,6 +521,9 @@ const Document = () => {
                       {savedDocuments.some(saved => saved.id === doc.id)
                         ? 'Retirer de la collection'
                         : 'Save'}
+                    </button>
+                    <button className="button-share" >
+                      share
                     </button>
                   </td>
                 </tr>
@@ -344,9 +537,11 @@ const Document = () => {
             )}
           </tbody>
         </table>
+
       </div>
     </div>
   );
 };
+
 
 export default Document;

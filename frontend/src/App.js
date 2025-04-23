@@ -15,6 +15,10 @@ import Details from './components/Details';
 import DetailsTache from './components/DetailsTasks';
 import DetailsWorkflow from './components/WorkflowDetails';
 import Accueil from './components/Accueil';
+import Register from './components/Register';
+import Folder from './components/Folder';
+import DocumentDetails from './components/DocumentDetails';
+
 function App() {
   return (
     <Router>
@@ -28,12 +32,15 @@ function App() {
           <Route path="/AdminUsers" element={<ProtectedRoute element={<AdminUsers />} />} />
           <Route path="/document" element={<ProtectedRoute element={<Doc />} />} />
           <Route path="/documents" element={<ProtectedRoute element={<Document />} />} />
+          <Route path="/folder" element={<ProtectedRoute element={<Folder/>} />} />      
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/workflow" element={<ProtectedRoute element={<Workflow />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
           <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
           <Route path="/details_taches/:id" element={<ProtectedRoute element={<DetailsTache />} />} />
           <Route path="/details_workflow/:id" element={<ProtectedRoute element={<DetailsWorkflow />} />} />
+          <Route path="/register" element={<ProtectedRoute element={<Register />} />} />
+          <Route path="/Documents/:id" element={<ProtectedRoute element={<DocumentDetails />} />} />
         </Routes>
       </Container>
     </Router>

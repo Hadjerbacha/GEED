@@ -3,6 +3,8 @@ import axios from 'axios';
 import { Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Navbar from './Navbar'; // Assurez-vous d'avoir un composant Navbar
+import { useNavigate } from 'react-router-dom';
+
 
 const Doc = () => {
   const [documents, setDocuments] = useState([]);
@@ -20,12 +22,21 @@ const Doc = () => {
   const [collections, setCollections] = useState([]);
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [selectedExistingCollection, setSelectedExistingCollection] = useState('');
+  const [selectedVersion, setSelectedVersion] = useState(null);
+
 
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
   const [forceUpload, setForceUpload] = useState(false);
 
+
+  const [accessType, setAccessType] = useState('private');
+
+
   const token = localStorage.getItem('token');
+
+  const navigate = useNavigate();
+
 
   const fetchDocuments = async () => {
     try {
@@ -51,7 +62,14 @@ const Doc = () => {
 
   useEffect(() => { fetchDocuments(); }, [token]);
 
-  const consultDocument = url => window.open(`http://localhost:5000${url}`, '_blank');
+  // Consultation
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  const consultDocument = url => {
+    window.open(`http://localhost:5000${url}`, '_blank');
+  };
 
   const handleDelete = async id => {
     if (!window.confirm('Êtes-vous sûr de vouloir supprimer ce document ?')) return;
@@ -73,37 +91,72 @@ const Doc = () => {
     setIsSavingCollection(true);
   };
 
+  // Déclaration de la liste des utilisateurs autorisés
+const [allowedUsers, setAllowedUsers] = useState([]);
+
+// Exemple de fonction pour ajouter un utilisateur à la liste
+const handleAddUser = (user) => {
+  setAllowedUsers([...allowedUsers, user]);
+};
+
+// Exemple de fonction pour supprimer un utilisateur de la liste
+const handleRemoveUser = (user) => {
+  setAllowedUsers(allowedUsers.filter(u => u !== user));
+};
+
+  //Upload
   const handleUpload = async () => {
+    // Validation des champs requis
     if (!pendingFile || !pendingName || !category) {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
+  
+    // Vérification des documents existants
     const existingDoc = documents.find(d => d.name === pendingName);
     if (existingDoc && !forceUpload) {
       setConflictingDocName(pendingName);
       setShowConflictPrompt(true);
       return;
     }
+  
+    // Vérification de la taille du fichier (limite de 10 Mo)
     if (pendingFile.size > 10 * 1024 * 1024) {
       setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
       return;
     }
+  
+    // Création du FormData pour l'envoi
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
     formData.append('category', category);
+    formData.append('visibility', accessType); // Type d'accès (public, private, custom)
     formData.append('collectionName', collectionName);
-    if (forceUpload) formData.append('isNewVersion', 'true');
-
+  
+    // Si l'accès est personnalisé (custom), ajouter les utilisateurs autorisés
+    if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
+      formData.append('allowedUsers', JSON.stringify(allowedUsers)); // Utilisateurs autorisés en JSON
+    }
+  
     try {
+      // Envoi du formulaire vers l'API
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       });
-      if (!res.ok) throw new Error(`Erreur : ${res.status}`);
+  
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || `Erreur : ${res.status}`);
+      }
+  
+      // Réponse réussie : ajout du nouveau document
       const newDoc = await res.json();
       setDocuments([newDoc, ...documents]);
+  
+      // Réinitialisation des champs après l'upload
       setPendingFile(null);
       setPendingName('');
       setCategory('');
@@ -112,12 +165,14 @@ const Doc = () => {
       setShowConflictPrompt(false);
       setConflictingDocName('');
       setErrorMessage(null);
+  
     } catch (err) {
-      console.error('Erreur upload :', err);
-      setErrorMessage("Erreur lors de l'envoi du document.");
+      // Gestion des erreurs
+      console.error('Erreur lors de l\'upload du document:', err);
+      setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
     }
   };
-
+  
   const saveCollection = async () => {
     const nameToUse = selectedExistingCollection || collectionName;
     if (!nameToUse) {
@@ -157,6 +212,10 @@ const Doc = () => {
     return matchesType && matchesDate && (matchesSearch || matchesAdvanced);
   });
 
+
+  
+
+
   return (
     <>
       <Navbar />
@@ -173,10 +232,22 @@ const Doc = () => {
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
         <Row className="mb-4">
-          <Col md={3}><Form.Control type="text" placeholder="Nom du document" value={pendingName} onChange={e => setPendingName(e.target.value)} /></Col>
-          <Col md={3}><Form.Control type="file" onChange={e => setPendingFile(e.target.files[0])} accept=".pdf,.docx,.jpg,.jpeg,.png" /></Col>
-          <Col md={3}><Form.Select value={category} onChange={e => setCategory(e.target.value)}><option value="">Catégorie</option><option value="rapport">Rapport</option><option value="article">Article</option><option value="mémoire">Mémoire</option><option value="autre">Autre</option></Form.Select></Col>
-          <Col md={3}><Button onClick={handleUpload}>Uploader</Button></Col>
+          <Col md={2}><Form.Control type="text" placeholder="Nom du document" value={pendingName} onChange={e => setPendingName(e.target.value)} /></Col>
+          <Col md={2}><Form.Control type="file" onChange={e => setPendingFile(e.target.files[0])} accept=".pdf,.docx,.jpg,.jpeg,.png" /></Col>
+          <Col md={2}><Form.Select value={category} onChange={e => setCategory(e.target.value)}><option value="">Catégorie</option><option value="rapport">Rapport</option><option value="article">Article</option><option value="mémoire">Mémoire</option><option value="autre">Autre</option></Form.Select></Col>
+          <Col md={2}>
+            <Form.Select
+              id="access"
+              value={accessType}
+              onChange={(e) => setAccessType(e.target.value)}
+            >
+              <option value="read">Privé</option>
+              <option value="public">Tous les utilisateurs</option>
+              <option value="custom">Utilisateurs spécifiques</option>
+            </Form.Select>
+          </Col>
+          <Col md={2}><Button onClick={handleUpload}>Uploader</Button></Col>
+
         </Row>
 
         <Modal show={showConflictPrompt} onHide={() => setShowConflictPrompt(false)}>
@@ -216,11 +287,31 @@ const Doc = () => {
           <tbody>
             {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
               <tr key={doc.id}>
-                <td>{doc.name} {doc.version && `(version ${doc.version})`}</td>
+                <td>{doc.name} {doc.version && `(version ${doc.version})`}
+                  <button
+                    onClick={() => {
+                      window.open(`http://localhost:5000${doc.file_path}`, '_blank');
+                      setShowModal(false);
+                    }}
+                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                    style={{ all: 'unset', cursor: 'pointer' }}
+                  >
+                    📄
+                  </button>
+
+
+                </td>
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
-                  <Button size="sm" variant="info" onClick={() => consultDocument(doc.file_path)}>Consulter</Button>{' '}
+                  <Button
+                    size="sm"
+                    variant="info"
+                    onClick={() => navigate(`/documents/${doc.id}`)}
+                  >
+                    Détails
+                  </Button>
+
                   <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>Supprimer</Button>{' '}
                   <Button size="sm" variant="success" onClick={() => toggleSaveDocument(doc)}>
                     {savedDocuments.some(d => d.id === doc.id) ? 'Retirer' : 'Save'}

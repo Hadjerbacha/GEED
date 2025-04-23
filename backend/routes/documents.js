@@ -82,16 +82,41 @@ async function initializeDatabase() {
       );
     `);
 
-    console.log('Tables documents, collections et document_collections prêtes');
+    // Table pour les permissions des documents
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS document_permissions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+        access_type VARCHAR(20) DEFAULT 'read'
+       );
+    `);
+
+
+    console.log('Tables documents, collections, document_collections et document_permissions prêtes');
   } catch (err) {
     console.error('Erreur lors de l\'initialisation:', err.stack);
   }
 }
 
-// GET : récupérer tous les documents
+
+// GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
+  const userId = req.user.id; // récupéré depuis le token
+
   try {
-    const result = await pool.query(`SELECT * FROM documents ORDER BY date DESC`);
+    const result = await pool.query(
+      `
+      SELECT d.*, dc.is_saved, dc.collection_name
+      FROM documents d
+      JOIN document_permissions dp ON dp.document_id = d.id
+      LEFT JOIN document_collections dc ON dc.document_id = d.id
+      WHERE dp.user_id = $1 AND dp.access_type = 'read'
+      ORDER BY d.date DESC
+      `,
+      [userId]
+    );
+
     res.status(200).json(result.rows);
   } catch (err) {
     console.error('Erreur:', err.stack);
@@ -99,9 +124,9 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// POST : ajouter un document avec OCR
+// Upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name } = req.body;
+  const { name, access, allowedUsers } = req.body;
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -114,38 +139,79 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
 
+    // Traitement du fichier PDF
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
       extractedText = data.text;
-    } else if (mimeType?.startsWith('image/')) {
+    } 
+    // Traitement des fichiers image
+    else if (mimeType?.startsWith('image/')) {
       const result = await Tesseract.recognize(fullPath, 'eng');
       extractedText = result.data.text;
-    } else {
+    } 
+    else {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
     }
 
+    // Classification du texte extrait
     const category = classifyText(extractedText);
 
-    const query = `
-      INSERT INTO documents (name, file_path, category, text_content)
-      VALUES ($1, $2, $3, $4)
+    // Insertion du document dans la base de données
+    const insertDocQuery = `
+      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
-    const values = [name, file_path, category, extractedText];
+    const docValues = [name, file_path, category, extractedText, req.user.id, access];
+    const result = await pool.query(insertDocQuery, docValues);
+    const documentId = result.rows[0].id;
 
-    const result = await pool.query(query, values);
+    // Gérer les permissions
+    if (access === 'public') {
+      const allUsers = await pool.query('SELECT id FROM users');
+      const insertPromises = allUsers.rows.map(user =>
+        pool.query(
+          'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
+          [user.id, documentId, 'public']
+        )
+      );
+      await Promise.all(insertPromises);
+    } else if (access === 'custom' && Array.isArray(allowedUsers)) {
+      const insertPromises = allowedUsers.map(userId =>
+        pool.query(
+          'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
+          [userId, documentId, 'custom']
+        )
+      );
+      await Promise.all(insertPromises);
+    } else  {
+      await pool.query(
+        'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
+        [req.user.id, documentId, 'read']
+      );
+    }
 
+    // Répondre avec succès
     res.status(201).json({
       ...result.rows[0],
-      preview: extractedText.slice(0, 300) + '...'
+      preview: extractedText.slice(0, 300) + '...',
+      permissions: access
     });
+
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => {});
+
+    // Si un fichier a été téléchargé, le supprimer
+    if (req.file) fs.unlink(req.file.path, () => { });
+
+    // Retourner une réponse d'erreur
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
+
+module.exports = router;
+
 
 // POST : créer une collection
 router.post('/collections', auth, async (req, res) => {
