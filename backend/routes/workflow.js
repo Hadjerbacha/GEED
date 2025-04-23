@@ -42,7 +42,8 @@ async function initialize() {
       assignment_note TEXT,
       assigned_at TIMESTAMP,
       status VARCHAR(50) DEFAULT 'pending',
-      created_at TIMESTAMP DEFAULT NOW()
+      created_at TIMESTAMP DEFAULT NOW(),
+      workflow_id INTEGER
     );
   `);
   console.log('Table tasks prête.');
@@ -63,7 +64,7 @@ const logger = winston.createLogger({
 
 // ⚠️ Ajoute le middleware d'authentification ici
 router.post('/', authMiddleware, upload.single('file'), async (req, res) => {
-  const { title, description, due_date, priority, notify, assigned_to } = req.body;
+  const { title, description, due_date, priority, notify, assigned_to, workflow_id } = req.body;
   const file_path = req.file ? `/uploads/${req.file.filename}` : null;
   const created_by = req.user.id; // ✅ Obtenu grâce à authMiddleware
 
@@ -86,9 +87,9 @@ router.post('/', authMiddleware, upload.single('file'), async (req, res) => {
     // ✅ Insertion avec created_by
     const result = await pool.query(
       `INSERT INTO tasks 
-        (title, description, due_date, priority, file_path, notify, assigned_to, created_by) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [title, description, due_date, priority, file_path, notify === 'true', userIds, created_by]
+        (title, description, due_date, priority, file_path, notify, assigned_to, created_by, workflow_id) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8,$9) RETURNING *`,
+      [title, description, due_date, priority, file_path, notify === 'true', userIds, created_by, workflow_id]
     );
 
     const task = result.rows[0];

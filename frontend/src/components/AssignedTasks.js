@@ -5,6 +5,7 @@ import { Table, Pagination } from 'react-bootstrap';
 import '../style/task.css';
 import Navbar from './Navbar';
 import { Modal, Button, Form } from 'react-bootstrap';
+import { useNavigate } from 'react-router-dom';
 
 // Fonction pour décoder le token JWT
 function parseJwt(token) {
@@ -30,7 +31,8 @@ const AssignedTasks = () => {
     in_progress: 0,
     completed: 0,
   });
-  
+  const navigate = useNavigate();
+
   
   const token = localStorage.getItem('token');
   const decodedToken = token ? parseJwt(token) : null;
@@ -167,12 +169,23 @@ const AssignedTasks = () => {
   };
 
   // Logique de filtrage des tâches
+  const [statusFilter, setStatusFilter] = useState(''); // Filtre par statut
+  const [priorityFilter, setPriorityFilter] = useState(''); // Filtre par priorité
+  const [creatorFilter, setCreatorFilter] = useState(''); // Filtre par créateur
+  const [dateFilter, setDateFilter] = useState(''); // Filtre par date
+
   const tasksPerPage = 10;
-  const filteredTasks = tasks.filter(task =>
-    (task.title?.toLowerCase().includes(search.toLowerCase()) ||
-    task.description?.toLowerCase().includes(search.toLowerCase()) ||
-    task.created_by_name?.toLowerCase().includes(search.toLowerCase()))  // Filtrage par nom ou prénom du créateur
-);
+ const filteredTasks = tasks.filter(task => {
+    return (
+      (task.title?.toLowerCase().includes(search.toLowerCase()) ||
+        task.description?.toLowerCase().includes(search.toLowerCase()) ||
+        task.created_by_name?.toLowerCase().includes(search.toLowerCase())) &&
+      (statusFilter ? task.status === statusFilter : true) &&
+      (priorityFilter ? task.priority === priorityFilter : true) &&
+      (creatorFilter ? task.created_by_name.toLowerCase().includes(creatorFilter.toLowerCase()) : true) &&
+      (dateFilter ? new Date(task.due_date) <= new Date(dateFilter) : true)
+    );
+  });
   
 
 
@@ -180,19 +193,77 @@ const AssignedTasks = () => {
   const currentTasks = filteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage);
 
 
+
+  const [workflows, setWorkflows] = useState([]);
+  useEffect(() => {
+    const token = localStorage.getItem('token'); // Récupère le token JWT du localStorage
+    const axiosConfig = {
+      headers: {
+        Authorization: `Bearer ${token}`, // Ajoute le token dans les en-têtes
+      },
+    };
   
+    axios.get('http://localhost:5000/api/workflows', axiosConfig)
+      .then(res => setWorkflows(res.data))
+      .catch(err => console.error("Erreur récupération workflows", err));
+  }, []); 
+  
+  const getWorkflowName = (id) => {
+  const wf = workflows.find(w => w.id === id);
+  return wf ? wf.name : '---';
+};
+
+
   return (
     <div>
       <Navbar />
 
-      <div className="d-flex justify-content-end align-items-center m-4">
+      <div className="d-flex justify-content-end align-items-center m-4" style={{ flexWrap: 'nowrap' }}>
+  <Form.Control
+    as="select"
+    value={statusFilter}
+    onChange={e => setStatusFilter(e.target.value)}
+    style={{ width: '150px', marginRight: '10px' }}
+  >
+    <option value="">Filtrer par statut</option>
+    <option value="pending">En attente</option>
+    <option value="assigned">Assignée</option>
+    <option value="in_progress">En cours</option>
+    <option value="completed">Terminée</option>
+  </Form.Control>
+  <Form.Control
+    as="select"
+    value={priorityFilter}
+    onChange={e => setPriorityFilter(e.target.value)}
+    style={{ width: '150px', marginRight: '10px' }}
+  >
+    <option value="">Filtrer par priorité</option>
+    <option value="Haute">Haute</option>
+    <option value="Moyenne">Moyenne</option>
+    <option value="Basse">Basse</option>
+  </Form.Control>
+  <Form.Control
+    type="text"
+    placeholder="Filtrer par créateur"
+    value={creatorFilter}
+    onChange={e => setCreatorFilter(e.target.value)}
+    style={{ width: '200px', marginRight: '10px' }}
+  />
+  <Form.Control
+    type="date"
+    value={dateFilter}
+    onChange={e => setDateFilter(e.target.value)}
+    style={{ width: '180px', marginRight: '10px' }}
+  />
   <Form.Control
     type="text"
     placeholder="Rechercher..."
-    style={{ width: '300px' }}
+    style={{ width: '250px' }}
     onChange={e => setSearch(e.target.value)}
   />
 </div>
+
+
 
       <div className="row m-4">
   <div className="col-md-3">
@@ -238,15 +309,13 @@ const AssignedTasks = () => {
         <Table striped bordered hover responsive>
           <thead>
             <tr>
-              <th>Titre</th>
-              <th>Description</th>
+              <th>Tâche</th>
+              <th>Workflow liée</th>
               <th>Échéance</th>
-              <th>Temps restant</th>
+              <th>Crée par</th>
               <th>Priorité</th>
               <th>Statut</th>
-              <th>D'après</th>
-              <th>Fichier</th>
-              <th>Note</th>
+              <th>Actions</th>
 
             </tr>
           </thead>
@@ -260,9 +329,8 @@ const AssignedTasks = () => {
            >
            
                 <td>{task.title}</td>
-                <td>{task.description}</td>
-                <td>{new Date(task.due_date).toLocaleDateString()}</td>
-                <td>
+                <td>{getWorkflowName(task.workflow_id)}</td>
+                <td>{new Date(task.due_date).toLocaleDateString()}<br/>      
   {(() => {
     const today = new Date();
     const dueDate = new Date(task.due_date);
@@ -276,7 +344,7 @@ const AssignedTasks = () => {
     return diffDays >= 0 ? `${diffDays} jour(s)` : "⛔ Dépassée";
   })()}
 </td>
-
+                <td>{task.created_by_name}</td>
                 <td className={getPriorityColor(task.priority)}>
                     {task.priority}
                 </td>
@@ -292,18 +360,16 @@ const AssignedTasks = () => {
                     <option value="completed" className="text-dark">✅ Terminée</option>
                   </select>
                 </td>
-                <td>{task.created_by_name}</td>
                 <td>
-  {task.file_path && task.file_path !== '/uploads/' ? (
-    <a href={`http://localhost:5000${task.file_path}`} target="_blank" rel="noreferrer">Voir</a>
-  ) : "-"}
+  <Button
+    size="sm"
+    variant="info"
+    onClick={() => navigate(`/details_taches/${task.id}`)}
+  >
+    📄 Détails
+  </Button>
 </td>
 
-                <td>
-                <Button size="sm" variant="info" onClick={() => handleOpenModal(task)}>
-                    💬 Voir / Ajouter
-                </Button>
-                </td>
 
               </tr>
             ))}

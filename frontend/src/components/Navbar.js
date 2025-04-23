@@ -61,7 +61,7 @@ const Navbar = () => {
   const sidebarItems = [
     {
       title: 'Accueil',
-      path: '/',
+      path: '/accueil',
       icon: <AiIcons.AiFillHome />,
     },
     currentUser?.role === 'admin' && {
@@ -72,7 +72,7 @@ const Navbar = () => {
     
     {
       title: 'Documents',
-      path: '/Document',
+      path: '/documents',
       icon: <FaIcons.FaPlus />,
     },
     /*{
@@ -81,18 +81,18 @@ const Navbar = () => {
       icon: <FaIcons.FaTasks />,
     },*/
     {
-      title: 'Tâches créées par vous',
-      path: '/workflows',
+      title: 'Workflows',
+      path: '/workflow',
       icon: <FaIcons.FaClipboardList />,
     },
     {
-      title: 'Tâches assignées à vous',
+      title: 'Mes tâches',
       path: '/mes-taches',
       icon: <FaIcons.FaUserCheck />,
     },
     {
-      title: 'Tableau de bord / test doc',
-      path: '/documents',
+      title: 'Tableau de bord',
+      path: '/document',
       icon: <FaIcons.FaChartBar />,
     },
     {
