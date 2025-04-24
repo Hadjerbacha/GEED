@@ -107,12 +107,15 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT d.*, dc.is_saved, dc.collection_name
+      SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
       FROM documents d
       JOIN document_permissions dp ON dp.document_id = d.id
       LEFT JOIN document_collections dc ON dc.document_id = d.id
-      WHERE dp.user_id = $1 AND dp.access_type = 'read'
-      ORDER BY d.date DESC
+      WHERE 
+      dp.access_type = 'public'
+      OR (dp.user_id = $1 AND dp.access_type = 'custom')
+      OR ( dp.user_id = $1 AND dp.access_type = 'read')
+      ORDER BY d.date DESC;
       `,
       [userId]
     );
@@ -163,7 +166,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     const result = await pool.query(insertDocQuery, docValues);
     const documentId = result.rows[0].id;
 
-     //🔐 Gérer les permissions
+    //🔐 Gérer les permissions
     if (access === 'public') {
       const allUsers = await pool.query('SELECT id FROM users');
       const insertPromises = allUsers.rows.map(user =>
