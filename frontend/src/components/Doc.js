@@ -131,20 +131,21 @@ const handleRemoveUser = (user) => {
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
     formData.append('category', category);
-    formData.append('visibility', accessType); // Type d'accès (public, private, custom)
+    formData.append('access', accessType); // <-- ici : champ "access" attendu côté serveur
     formData.append('collectionName', collectionName);
   
-    // Si l'accès est personnalisé (custom), ajouter les utilisateurs autorisés
+    // Si l'accès est personnalisé, ajouter les utilisateurs autorisés
     if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
-      formData.append('allowedUsers', JSON.stringify(allowedUsers)); // Utilisateurs autorisés en JSON
+      formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
   
     try {
-      // Envoi du formulaire vers l'API
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
+        headers: {
+          Authorization: `Bearer ${token}`, // Pas de Content-Type, sinon FormData est cassé
+        },
+        body: formData,
       });
   
       if (!res.ok) {
@@ -152,7 +153,6 @@ const handleRemoveUser = (user) => {
         throw new Error(errorData.error || `Erreur : ${res.status}`);
       }
   
-      // Réponse réussie : ajout du nouveau document
       const newDoc = await res.json();
       setDocuments([newDoc, ...documents]);
   
@@ -167,11 +167,11 @@ const handleRemoveUser = (user) => {
       setErrorMessage(null);
   
     } catch (err) {
-      // Gestion des erreurs
       console.error('Erreur lors de l\'upload du document:', err);
       setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
     }
   };
+  
   
   const saveCollection = async () => {
     const nameToUse = selectedExistingCollection || collectionName;
@@ -214,6 +214,7 @@ const handleRemoveUser = (user) => {
 
 
   
+  
 
 
   return (
@@ -241,7 +242,7 @@ const handleRemoveUser = (user) => {
               value={accessType}
               onChange={(e) => setAccessType(e.target.value)}
             >
-              <option value="read">Privé</option>
+              <option value="private">Privé</option>
               <option value="public">Tous les utilisateurs</option>
               <option value="custom">Utilisateurs spécifiques</option>
             </Form.Select>
