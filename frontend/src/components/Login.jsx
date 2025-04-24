@@ -16,7 +16,7 @@ const Login = () => {
     const { data: res } = await axios.post(url, data);
     localStorage.setItem("token", res.token);
     localStorage.setItem("user", JSON.stringify(res.user));
-    window.location = "/workflows";
+    window.location = "/accueil"; // Redirection vers la page d'accueil
 		} catch (error) {
 			if (
 				error.response &&

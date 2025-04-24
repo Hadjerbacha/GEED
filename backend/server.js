@@ -4,12 +4,13 @@ const express = require("express");
 const cors = require("cors");
 
 const authRoutes = require("./routes/auth");
-const workflowsRoutes = require("./routes/workflow");
+const tasksRoutes = require("./routes/workflow");
 const docsRoutes = require("./routes/documents");
 const chatRoutes =require("./routes/chatbot");
 const collectionRoutes =require("./routes/collection");
 const groupRoutes = require('./routes/groupe');
 const listTasksRoutes = require('./routes/listTasks');
+const workflowsRoutes = require("./routes/task");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,10 +29,11 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/documents", docsRoutes);
-app.use("/api/tasks", workflowsRoutes);
+app.use("/api/tasks", tasksRoutes);
 app.use("/api/collection",collectionRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/list-tasks', listTasksRoutes);
+app.use('/api/workflows', workflowsRoutes);
 // Lancement du serveur
 app.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
 
