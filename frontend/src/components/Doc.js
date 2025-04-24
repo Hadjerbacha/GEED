@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { Tooltip, OverlayTrigger, Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import Navbar from './Navbar'; // Assurez-vous d'avoir un composant Navbar
+import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
+import 'react-toastify/dist/ReactToastify.css';
+
 
 
 
@@ -46,6 +48,8 @@ const Doc = () => {
 
 
   const token = localStorage.getItem('token');
+  const [isSaving, setIsSaving] = useState(false);
+
 
   const navigate = useNavigate();
 
@@ -56,6 +60,9 @@ const Doc = () => {
     setShareUsers(doc.allowedUsers || []);
     setShowShareModal(true);
   };
+
+
+
 
 
 
@@ -255,7 +262,7 @@ const Doc = () => {
 
   return (
     <>
-    
+
       <Navbar />
       <div className="container-fluid">
 
@@ -394,88 +401,94 @@ const Doc = () => {
                   <Button variant="light" onClick={() => openShareModal(doc)}>
                     <img src="share.png" alt="Partager" width="20" />
                   </Button>
-                  {/* Modale de partage */}
-<Modal show={showShareModal} onHide={() => setShowShareModal(false)}>
-  <Modal.Header closeButton>
-    <Modal.Title>Partager le document : {docToShare?.name}</Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    <Form>
-      <Form.Group>
-        <Form.Label>Type d'accès</Form.Label>
-        <Form.Select
-          value={shareAccessType}
-          onChange={(e) => setShareAccessType(e.target.value)}
-        >
-          <option value="public">Public (Tous les utilisateurs)</option>
-          <option value="custom">Sélectionner des utilisateurs</option>
-        </Form.Select>
-      </Form.Group>
-
-      {shareAccessType === 'custom' && (
-        <Form.Group>
-          <Form.Label>Utilisateurs autorisés</Form.Label>
-          <Select
-            isMulti
-            options={users}
-            value={users.filter(option =>
-              shareUsers.includes(option.value)
-            )}
-            onChange={(selectedOptions) => {
-              const selectedUserIds = selectedOptions.map((opt) => opt.value);
-              setShareUsers(selectedUserIds);
-            }}
-            placeholder="Sélectionner des utilisateurs..."
-          />
-        </Form.Group>
-      )}
-    </Form>
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={() => setShowShareModal(false)}>
-      Annuler
-    </Button>
-    <Button
-      variant="primary"
-      onClick={async () => {
-        // Logique pour sauvegarder les permissions
-        const updatedDoc = {
-          ...docToShare,
-          access: shareAccessType,
-          allowedUsers: shareUsers,  // Utilisateurs sélectionnés si "custom"
-        };
-
-        // Mise à jour du document via API
-        try {
-          await axios.put(`http://localhost:5000/api/documents/${docToShare.id}`, updatedDoc, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          setDocuments(docs => docs.map(doc => doc.id === docToShare.id ? updatedDoc : doc));
-          setShowShareModal(false);
-        } catch (err) {
-          console.error('Erreur de mise à jour des permissions', err);
-        }
-      }}
-    >
-      Enregistrer
-    </Button>
-  </Modal.Footer>
-</Modal>
-
                 </td>
 
               </tr>
             )) : (
               <tr><td colSpan="4" className="text-center">Aucun document trouvé</td></tr>
             )}
-            
+
           </tbody>
         </Table>
-        
+        <Modal
+          show={showShareModal}
+          onHide={() => setShowShareModal(false)}
+          backdrop="static"
+          keyboard={false}
+          centered
+          style={{ zIndex: 1050 }}
+          backdropClassName="custom-backdrop"
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Partager le document : {docToShare?.name}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form>
+              <Form.Group>
+                <Form.Label>Type d'accès</Form.Label>
+                <Form.Select
+                  value={shareAccessType}
+                  onChange={(e) => setShareAccessType(e.target.value)}
+                >
+                  <option value="public">Public (Tous les utilisateurs)</option>
+                  <option value="custom">Sélectionner des utilisateurs</option>
+                </Form.Select>
+              </Form.Group>
+
+              {shareAccessType === 'custom' && (
+                <Form.Group>
+                  <Form.Label>Utilisateurs autorisés</Form.Label>
+                  <Select
+                    isMulti
+                    options={users}
+                    value={users.filter(option =>
+                      shareUsers.includes(option.value)
+                    )}
+                    onChange={(selectedOptions) => {
+                      const selectedUserIds = selectedOptions.map((opt) => opt.value);
+                      setShareUsers(selectedUserIds);
+                    }}
+                    placeholder="Sélectionner des utilisateurs..."
+                  />
+                </Form.Group>
+              )}
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowShareModal(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                const updatedDoc = {
+                  ...docToShare,
+                  access: shareAccessType,
+                  allowedUsers: shareUsers,
+                };
+
+                try {
+                  await axios.put(`http://localhost:5000/api/documents/${docToShare.id}`, updatedDoc, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  setDocuments(docs => docs.map(doc => doc.id === docToShare.id ? updatedDoc : doc));
+                  setShowShareModal(false);
+                } catch (err) {
+                  console.error('Erreur de mise à jour des permissions', err);
+                }
+              }}
+            >
+              Enregistrer
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+
+
       </div>
-      
+
     </>
-    
+
   );
 };
 
