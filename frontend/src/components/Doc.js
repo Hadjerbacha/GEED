@@ -6,6 +6,7 @@ import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import 'react-toastify/dist/ReactToastify.css';
+import shareIcon from './share.png';
 
 
 
@@ -399,7 +400,8 @@ const Doc = () => {
 
                   {/* Bouton de partage */}
                   <Button variant="light" onClick={() => openShareModal(doc)}>
-                    <img src="share.png" alt="Partager" width="20" />
+                  <img src={shareIcon} width="20" alt="Partager" />
+
                   </Button>
                 </td>
 
