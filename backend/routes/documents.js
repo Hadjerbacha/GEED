@@ -203,6 +203,33 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   }
 });
 
+// GET : récupérer un document spécifique par ID
+router.get('/:id', auth, async (req, res) => {
+  const { id } = req.params;  // Récupérer l'ID du document depuis l'URL
+  const userId = req.user.id; // Récupérer l'ID de l'utilisateur connecté depuis le token
+
+  try {
+    // Requête pour récupérer le document, vérification de l'accès selon l'utilisateur
+    const result = await pool.query(`
+      SELECT d.*, dp.access_type
+      FROM documents d
+      JOIN document_permissions dp ON dp.document_id = d.id
+      WHERE d.id = $1 AND (dp.access_type = 'public' OR dp.user_id = $2 OR dp.access_type = 'custom')
+    `, [id, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Document non trouvé ou accès refusé' });
+    }
+
+    // Le document a été trouvé et l'utilisateur a l'accès approprié
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur:', err.stack);
+    res.status(500).json({ error: 'Erreur serveur', details: err.message });
+  }
+});
+
+
 
 // POST : créer une collection
 router.post('/collections', auth, async (req, res) => {

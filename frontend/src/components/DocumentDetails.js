@@ -3,92 +3,108 @@ import Navbar from './Navbar';
 import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom'; 
 
-
 const DocumentDetails = () => {
-  const { id } = useParams(); // Récupérer l'ID du document depuis l'URL
+  const { id } = useParams(); // ID du document depuis l'URL
+
+  console.log("🧾 ID reçu dans l’URL :", id);
+  
   const [document, setDocument] = useState(null);
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(null);
-  const token = localStorage.getItem('token'); // Récupérer le token pour l'authentification
   const [errorMessage, setErrorMessage] = useState(null);
+  const token = localStorage.getItem('token');
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Supprime les appels API pour l'instant
-    const fakeDocument = {
-      name: "Rapport Technique - Projet GED",
-      category: "Technique",
-      collectionName: "Projets Internes",
-      createdAt: new Date(),
-      visibility: "Privé",
-      text_content: "Voici le contenu extrait du document pour test d'affichage...",
-      version: 1
+
+    console.log("ID document :", id);
+
+    const fetchDocument = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/documents/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Échec du chargement du document");
+        const doc = await res.json();
+        setDocument(doc);
+        setSelectedVersion(doc.version); // Initialiser la version sélectionnée
+      } catch (error) {
+        console.error("Erreur document :", error);
+        setErrorMessage("Impossible de charger le document.");
+      }
     };
 
-    const fakeVersions = [
-      { id: 1, version: 1, date: new Date() },
-      { id: 2, version: 2, date: new Date() }
-    ];
+    
 
-    setDocument(fakeDocument);
-    setVersions(fakeVersions);
-    setSelectedVersion(1);
-  }, []);
+    
+    const fetchVersions = async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/api/documents/versions/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Échec du chargement des versions");
+        const versionList = await res.json();
+        setVersions(versionList);
+      } catch (error) {
+        console.error("Erreur versions :", error);
+      }
+    };
 
-  /*
-      const fetchVersions = async () => {
-        try {
-          const res = await fetch(`http://localhost:5000/api/documents/versions/${id}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const versionList = await res.json();
-          setVersions(versionList); // Enregistrer la liste des versions du document
-        } catch (error) {
-          console.error('Erreur lors du chargement des versions :', error);
-        }
-      };
-  
+    if (id && token) {
       fetchDocument();
       fetchVersions();
-  
-    }, [id, token]); // Refait un appel si l'ID ou le token change
-  */
-  const handleVersionChange = (e) => {
+    }
+  }, [id, token]);
+
+  const handleVersionChange = async (e) => {
     const versionId = e.target.value;
     const selected = versions.find(v => v.id === parseInt(versionId));
-    setDocument(selected); // Mettre à jour les données du document selon la version choisie
-    setSelectedVersion(selected.version);
+    if (selected) {
+      try {
+        const res = await fetch(`http://localhost:5000/api/documents/version/${selected.id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (!res.ok) throw new Error("Échec du chargement de la version sélectionnée");
+        const versionDoc = await res.json();
+        setDocument(versionDoc);
+        setSelectedVersion(versionDoc.version);
+      } catch (error) {
+        console.error("Erreur chargement version :", error);
+      }
+    }
   };
 
   const handleBack = () => {
-    navigate('/documents'); // Redirige vers la liste des documents
+    navigate('/documents');
   };
 
   return (
     <>
-      <Navbar /> {/* Affichage de la barre de navigation */}
+      <Navbar />
       <Container className="mt-4 d-flex justify-content-center">
-        {document ? (
+        {errorMessage ? (
+          <p className="text-danger">{errorMessage}</p>
+        ) : document ? (
           <Card className="shadow p-4" style={{ width: '100%', maxWidth: '700px' }}>
             <Card.Body>
-               {/* 🔙 Bouton Retour */}
-               <div className="mt-4 text-end">
+              <div className="mt-4 text-end">
                 <Button variant="secondary" onClick={handleBack}>
                   ⬅️ Revenir aux documents
                 </Button>
               </div>
               <h3 className="mb-4 d-flex align-items-center justify-content-between">
                 <span>📄 Détails du document</span>
-                <a
-                  href={document.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-outline-primary btn-sm"
-                >
-                  🔍 Voir le document
-                </a>
+                {document.url && (
+                  <a
+                    href={document.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="btn btn-outline-primary btn-sm"
+                  >
+                    🔍 Voir le document
+                  </a>
+                )}
               </h3>
-
 
               <p><strong>📌 Nom :</strong> {document.name}</p>
               <p><strong>📂 Catégorie :</strong> {document.category}</p>
@@ -107,7 +123,7 @@ const DocumentDetails = () => {
                 </div>
               </div>
 
-              {versions && versions.length > 0 && (
+              {versions.length > 0 && (
                 <Form.Group className="mt-4">
                   <Form.Label><strong>📑 Autres versions :</strong></Form.Label>
                   <Form.Select value={selectedVersion} onChange={handleVersionChange}>
