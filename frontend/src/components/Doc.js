@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
+import { Tooltip, OverlayTrigger, Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
-import Navbar from './Navbar'; // Assurez-vous d'avoir un composant Navbar
+import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
+import Select from 'react-select';
+import 'react-toastify/dist/ReactToastify.css';
+import shareIcon from './share.png';
+
+
 
 
 const Doc = () => {
@@ -24,6 +29,9 @@ const Doc = () => {
   const [selectedExistingCollection, setSelectedExistingCollection] = useState('');
   const [selectedVersion, setSelectedVersion] = useState(null);
 
+  const [users, setUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+
 
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
@@ -32,10 +40,31 @@ const Doc = () => {
 
   const [accessType, setAccessType] = useState('private');
 
+  //modal
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [docToShare, setDocToShare] = useState(null);
+  const [shareAccessType, setShareAccessType] = useState('private');
+  const [shareUsers, setShareUsers] = useState([]);
+
+
 
   const token = localStorage.getItem('token');
+  const [isSaving, setIsSaving] = useState(false);
+
 
   const navigate = useNavigate();
+
+  //fonction MODAL
+  const openShareModal = (doc) => {
+    setDocToShare(doc);
+    setShareAccessType(doc.access || 'private');
+    setShareUsers(doc.allowedUsers || []);
+    setShowShareModal(true);
+  };
+
+
+
+
 
 
   const fetchDocuments = async () => {
@@ -60,7 +89,22 @@ const Doc = () => {
     }
   };
 
-  useEffect(() => { fetchDocuments(); }, [token]);
+  useEffect(() => {
+    fetchDocuments();
+    fetchUsers();
+  }, [token]);
+
+
+  const fetchUsers = async () => {
+    try {
+      const res = await axios.get('http://localhost:5000/api/auth/users/');
+      const formatted = res.data.map(u => ({ value: u.id, label: `${u.name} ${u.prenom}` }));
+      setUsers(formatted);
+    } catch (err) {
+      console.error('Erreur chargement des utilisateurs', err);
+    }
+  };
+
 
   // Consultation
   const [selectedDoc, setSelectedDoc] = useState(null);
@@ -92,17 +136,17 @@ const Doc = () => {
   };
 
   // Déclaration de la liste des utilisateurs autorisés
-const [allowedUsers, setAllowedUsers] = useState([]);
+  const [allowedUsers, setAllowedUsers] = useState([]);
 
-// Exemple de fonction pour ajouter un utilisateur à la liste
-const handleAddUser = (user) => {
-  setAllowedUsers([...allowedUsers, user]);
-};
+  // Exemple de fonction pour ajouter un utilisateur à la liste
+  const handleAddUser = (user) => {
+    setAllowedUsers([...allowedUsers, user]);
+  };
 
-// Exemple de fonction pour supprimer un utilisateur de la liste
-const handleRemoveUser = (user) => {
-  setAllowedUsers(allowedUsers.filter(u => u !== user));
-};
+  // Exemple de fonction pour supprimer un utilisateur de la liste
+  const handleRemoveUser = (user) => {
+    setAllowedUsers(allowedUsers.filter(u => u !== user));
+  };
 
   //Upload
   const handleUpload = async () => {
@@ -111,7 +155,7 @@ const handleRemoveUser = (user) => {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
-  
+
     // Vérification des documents existants
     const existingDoc = documents.find(d => d.name === pendingName);
     if (existingDoc && !forceUpload) {
@@ -119,43 +163,43 @@ const handleRemoveUser = (user) => {
       setShowConflictPrompt(true);
       return;
     }
-  
+
     // Vérification de la taille du fichier (limite de 10 Mo)
     if (pendingFile.size > 10 * 1024 * 1024) {
       setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
       return;
     }
-  
+
     // Création du FormData pour l'envoi
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
     formData.append('category', category);
-    formData.append('visibility', accessType); // Type d'accès (public, private, custom)
+    formData.append('access', accessType); // <-- ici : champ "access" attendu côté serveur
     formData.append('collectionName', collectionName);
-  
-    // Si l'accès est personnalisé (custom), ajouter les utilisateurs autorisés
+
+    // Si l'accès est personnalisé, ajouter les utilisateurs autorisés
     if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
-      formData.append('allowedUsers', JSON.stringify(allowedUsers)); // Utilisateurs autorisés en JSON
+      formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
-  
+
     try {
-      // Envoi du formulaire vers l'API
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
+        headers: {
+          Authorization: `Bearer ${token}`, // Pas de Content-Type, sinon FormData est cassé
+        },
+        body: formData,
       });
-  
+
       if (!res.ok) {
         const errorData = await res.json();
         throw new Error(errorData.error || `Erreur : ${res.status}`);
       }
-  
-      // Réponse réussie : ajout du nouveau document
+
       const newDoc = await res.json();
       setDocuments([newDoc, ...documents]);
-  
+
       // Réinitialisation des champs après l'upload
       setPendingFile(null);
       setPendingName('');
@@ -165,14 +209,14 @@ const handleRemoveUser = (user) => {
       setShowConflictPrompt(false);
       setConflictingDocName('');
       setErrorMessage(null);
-  
+
     } catch (err) {
-      // Gestion des erreurs
       console.error('Erreur lors de l\'upload du document:', err);
       setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
     }
   };
-  
+
+
   const saveCollection = async () => {
     const nameToUse = selectedExistingCollection || collectionName;
     if (!nameToUse) {
@@ -213,11 +257,13 @@ const handleRemoveUser = (user) => {
   });
 
 
-  
+
+
 
 
   return (
     <>
+
       <Navbar />
       <div className="container-fluid">
 
@@ -232,48 +278,94 @@ const handleRemoveUser = (user) => {
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
         <Row className="mb-4">
-          <Col md={2}><Form.Control type="text" placeholder="Nom du document" value={pendingName} onChange={e => setPendingName(e.target.value)} /></Col>
-          <Col md={2}><Form.Control type="file" onChange={e => setPendingFile(e.target.files[0])} accept=".pdf,.docx,.jpg,.jpeg,.png" /></Col>
-          <Col md={2}><Form.Select value={category} onChange={e => setCategory(e.target.value)}><option value="">Catégorie</option><option value="rapport">Rapport</option><option value="article">Article</option><option value="mémoire">Mémoire</option><option value="autre">Autre</option></Form.Select></Col>
+          <Col md={2}>
+            <Form.Control
+              type="text"
+              placeholder="Nom du document"
+              value={pendingName}
+              onChange={e => setPendingName(e.target.value)}
+            />
+          </Col>
+
+          <Col md={2}>
+            <Form.Control
+              type="file"
+              onChange={e => setPendingFile(e.target.files[0])}
+              accept=".pdf,.docx,.jpg,.jpeg,.png"
+            />
+          </Col>
+
+          <Col md={2}>
+            <Form.Select value={category} onChange={e => setCategory(e.target.value)}>
+              <option value="">Catégorie</option>
+              <option value="rapport">Rapport</option>
+              <option value="article">Article</option>
+              <option value="mémoire">Mémoire</option>
+              <option value="autre">Autre</option>
+            </Form.Select>
+          </Col>
+
           <Col md={2}>
             <Form.Select
               id="access"
               value={accessType}
               onChange={(e) => setAccessType(e.target.value)}
             >
-              <option value="read">Privé</option>
+              <option value="private">Privé</option>
               <option value="public">Tous les utilisateurs</option>
               <option value="custom">Utilisateurs spécifiques</option>
             </Form.Select>
           </Col>
-          <Col md={2}><Button onClick={handleUpload}>Uploader</Button></Col>
 
+          {accessType === 'custom' && (
+            <Col md={2}>
+              <Form.Group>
+                <Select
+                  isMulti
+                  options={users}
+                  value={users.filter(option =>
+                    allowedUsers.includes(option.value)
+                  )}
+                  onChange={(selectedOptions) => {
+                    const selectedUserIds = selectedOptions.map((opt) => opt.value);
+                    setAllowedUsers(selectedUserIds);
+                  }}
+                  placeholder="Select..."
+                />
+              </Form.Group>
+
+            </Col>
+          )}
+
+          <Col md={2}>
+            <OverlayTrigger
+              placement="top"
+              overlay={
+                accessType === 'custom' && allowedUsers.length === 0 ? (
+                  <Tooltip id="tooltip-disabled">
+                    Veuillez sélectionner au moins un utilisateur.
+                  </Tooltip>
+                ) : (
+                  <></>
+                )
+              }
+            >
+              <span className="d-inline-block">
+                <Button
+                  onClick={handleUpload}
+                  disabled={accessType === 'custom' && allowedUsers.length === 0}
+                  style={
+                    accessType === 'custom' && allowedUsers.length === 0
+                      ? { pointerEvents: 'none' }
+                      : {}
+                  }
+                >
+                  Uploader
+                </Button>
+              </span>
+            </OverlayTrigger>
+          </Col>
         </Row>
-
-        <Modal show={showConflictPrompt} onHide={() => setShowConflictPrompt(false)}>
-          <Modal.Header closeButton><Modal.Title>Conflit de version</Modal.Title></Modal.Header>
-          <Modal.Body>Un fichier nommé <strong>{conflictingDocName}</strong> existe déjà. Enregistrer une nouvelle version ?</Modal.Body>
-          <Modal.Footer>
-            <Button variant="primary" onClick={() => { setForceUpload(true); handleUpload(); }}>Oui</Button>
-            <Button variant="secondary" onClick={() => setShowConflictPrompt(false)}>Non</Button>
-          </Modal.Footer>
-        </Modal>
-
-        {isSavingCollection && savedDocuments.length > 0 && (
-          <div className="my-4">
-            <h4>📁 Ma Collection</h4>
-            <Row>
-              <Col md={4}><Form.Select value={selectedExistingCollection} onChange={e => setSelectedExistingCollection(e.target.value)}><option value="">Collection existante</option>{collections.map(col => <option key={col}>{col}</option>)}</Form.Select></Col>
-              <Col md={4}><Form.Control type="text" placeholder="Ou entrer un nom..." value={collectionName} onChange={e => setCollectionName(e.target.value)} /></Col>
-              <Col md={4}><Button onClick={saveCollection}>Sauvegarder</Button></Col>
-            </Row>
-            <ul className="mt-2">
-              {savedDocuments.map(doc => (
-                <li key={doc.id}>{doc.name} - {doc.category} <Button size="sm" variant="danger" onClick={() => toggleSaveDocument(doc)}>❌</Button></li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <Table striped bordered hover responsive>
           <thead>
@@ -287,20 +379,7 @@ const handleRemoveUser = (user) => {
           <tbody>
             {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
               <tr key={doc.id}>
-                <td>{doc.name} {doc.version && `(version ${doc.version})`}
-                  <button
-                    onClick={() => {
-                      window.open(`http://localhost:5000${doc.file_path}`, '_blank');
-                      setShowModal(false);
-                    }}
-                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
-                    style={{ all: 'unset', cursor: 'pointer' }}
-                  >
-                    📄
-                  </button>
-
-
-                </td>
+                <td>{doc.name} {doc.version && `(version ${doc.version})`}</td>
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
@@ -312,19 +391,106 @@ const handleRemoveUser = (user) => {
                     Détails
                   </Button>
 
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>Supprimer</Button>{' '}
+                  <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>
+                    Supprimer
+                  </Button>{' '}
                   <Button size="sm" variant="success" onClick={() => toggleSaveDocument(doc)}>
                     {savedDocuments.some(d => d.id === doc.id) ? 'Retirer' : 'Save'}
                   </Button>
+
+                  {/* Bouton de partage */}
+                  <Button variant="light" onClick={() => openShareModal(doc)}>
+                  <img src={shareIcon} width="20" alt="Partager" />
+
+                  </Button>
                 </td>
+
               </tr>
             )) : (
               <tr><td colSpan="4" className="text-center">Aucun document trouvé</td></tr>
             )}
+
           </tbody>
         </Table>
+        <Modal
+          show={showShareModal}
+          onHide={() => setShowShareModal(false)}
+          backdrop="static"
+          keyboard={false}
+          centered
+          style={{ zIndex: 1050 }}
+          backdropClassName="custom-backdrop"
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Partager le document : {docToShare?.name}</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form>
+              <Form.Group>
+                <Form.Label>Type d'accès</Form.Label>
+                <Form.Select
+                  value={shareAccessType}
+                  onChange={(e) => setShareAccessType(e.target.value)}
+                >
+                  <option value="public">Public (Tous les utilisateurs)</option>
+                  <option value="custom">Sélectionner des utilisateurs</option>
+                </Form.Select>
+              </Form.Group>
+
+              {shareAccessType === 'custom' && (
+                <Form.Group>
+                  <Form.Label>Utilisateurs autorisés</Form.Label>
+                  <Select
+                    isMulti
+                    options={users}
+                    value={users.filter(option =>
+                      shareUsers.includes(option.value)
+                    )}
+                    onChange={(selectedOptions) => {
+                      const selectedUserIds = selectedOptions.map((opt) => opt.value);
+                      setShareUsers(selectedUserIds);
+                    }}
+                    placeholder="Sélectionner des utilisateurs..."
+                  />
+                </Form.Group>
+              )}
+            </Form>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowShareModal(false)}>
+              Annuler
+            </Button>
+            <Button
+              variant="primary"
+              onClick={async () => {
+                const updatedDoc = {
+                  ...docToShare,
+                  access: shareAccessType,
+                  allowedUsers: shareUsers,
+                };
+
+                try {
+                  await axios.put(`http://localhost:5000/api/documents/${docToShare.id}`, updatedDoc, {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                  setDocuments(docs => docs.map(doc => doc.id === docToShare.id ? updatedDoc : doc));
+                  setShowShareModal(false);
+                } catch (err) {
+                  console.error('Erreur de mise à jour des permissions', err);
+                }
+              }}
+            >
+              Enregistrer
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+
+
       </div>
+
     </>
+
   );
 };
 

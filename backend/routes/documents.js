@@ -107,12 +107,15 @@ router.get('/', auth, async (req, res) => {
   try {
     const result = await pool.query(
       `
-      SELECT d.*, dc.is_saved, dc.collection_name
+      SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
       FROM documents d
       JOIN document_permissions dp ON dp.document_id = d.id
       LEFT JOIN document_collections dc ON dc.document_id = d.id
-      WHERE dp.user_id = $1 AND dp.access_type = 'read'
-      ORDER BY d.date DESC
+      WHERE 
+      dp.access_type = 'public'
+      OR (dp.user_id = $1 AND dp.access_type = 'custom')
+      OR ( dp.user_id = $1 AND dp.access_type = 'read')
+      ORDER BY d.date DESC;
       `,
       [userId]
     );
@@ -124,7 +127,9 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// Upload document
+
+
+//upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
   const { name, access, allowedUsers } = req.body;
 
@@ -139,27 +144,21 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
 
-    // Traitement du fichier PDF
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
       extractedText = data.text;
-    } 
-    // Traitement des fichiers image
-    else if (mimeType?.startsWith('image/')) {
+    } else if (mimeType?.startsWith('image/')) {
       const result = await Tesseract.recognize(fullPath, 'eng');
       extractedText = result.data.text;
-    } 
-    else {
+    } else {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
     }
 
-    // Classification du texte extrait
     const category = classifyText(extractedText);
 
-    // Insertion du document dans la base de données
     const insertDocQuery = `
-      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility)
+     INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility)
       VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *;
     `;
@@ -167,7 +166,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     const result = await pool.query(insertDocQuery, docValues);
     const documentId = result.rows[0].id;
 
-    // Gérer les permissions
+    //🔐 Gérer les permissions
     if (access === 'public') {
       const allUsers = await pool.query('SELECT id FROM users');
       const insertPromises = allUsers.rows.map(user =>
@@ -185,32 +184,51 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
         )
       );
       await Promise.all(insertPromises);
-    } else  {
+    } else {
       await pool.query(
         'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
         [req.user.id, documentId, 'read']
       );
     }
 
-    // Répondre avec succès
     res.status(201).json({
       ...result.rows[0],
       preview: extractedText.slice(0, 300) + '...',
       permissions: access
     });
-
   } catch (err) {
     console.error('Erreur:', err.stack);
-
-    // Si un fichier a été téléchargé, le supprimer
     if (req.file) fs.unlink(req.file.path, () => { });
-
-    // Retourner une réponse d'erreur
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
 
-module.exports = router;
+// GET : récupérer un document spécifique par ID
+router.get('/:id', auth, async (req, res) => {
+  const { id } = req.params;  // Récupérer l'ID du document depuis l'URL
+  const userId = req.user.id; // Récupérer l'ID de l'utilisateur connecté depuis le token
+
+  try {
+    // Requête pour récupérer le document, vérification de l'accès selon l'utilisateur
+    const result = await pool.query(`
+      SELECT d.*, dp.access_type
+      FROM documents d
+      JOIN document_permissions dp ON dp.document_id = d.id
+      WHERE d.id = $1 AND (dp.access_type = 'public' OR dp.user_id = $2 OR dp.access_type = 'custom')
+    `, [id, userId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Document non trouvé ou accès refusé' });
+    }
+
+    // Le document a été trouvé et l'utilisateur a l'accès approprié
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur:', err.stack);
+    res.status(500).json({ error: 'Erreur serveur', details: err.message });
+  }
+});
+
 
 
 // POST : créer une collection
