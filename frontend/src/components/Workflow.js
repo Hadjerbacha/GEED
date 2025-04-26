@@ -79,7 +79,7 @@ const Workflow = () => {
     const statuses = workflowTasks.map(task => task.status);
     if (statuses.every(s => s === 'completed')) return 'completed';
     if (statuses.includes('pending')) return 'pending';
-    if (statuses.includes('assigned')) return 'assigned';
+    if (statuses.includes('cancelled')) return 'cancelled';
     if (statuses.includes('in_progress')) return 'in_progress';
 
     return 'pending';
@@ -116,11 +116,46 @@ const filteredWorkflows = workflows.filter(wf => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'pending': return 'secondary';
-      case 'assigned': return 'info';
-      case 'in_progress': return 'warning';
-      case 'completed': return 'success';
-      default: return 'light';
+      case 'pending':
+        return 'secondary'; // gris
+      case 'in_progress':
+        return 'primary'; // bleu
+      case 'completed':
+        return 'success'; // vert
+      case 'cancelled':
+        return 'danger'; // rouge
+      default:
+        return 'secondary';
+    }
+  };
+  
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'pending':
+        return '⏳';
+      case 'in_progress':
+        return '🔧';
+      case 'completed':
+        return '✅';
+      case 'cancelled':
+        return '❌';
+      default:
+        return '';
+    }
+  };
+  
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'En attente';
+      case 'in_progress':
+        return 'En cours';
+      case 'completed':
+        return 'Terminée';
+      case 'cancelled':
+        return 'Annulée';
+      default:
+        return '';
     }
   };
 
@@ -136,8 +171,24 @@ const filteredWorkflows = workflows.filter(wf => {
   };
 
   const handleModalShow = () => setShowModal(true);
-
+  const [nameError, setNameError] = useState('');
   const handleCreateWorkflow = async () => {
+    const { name, description, echeance, priorite } = newWorkflow;
+    
+    if (!name.trim() || !description.trim() || !echeance || !priorite) {
+      toast.error("Veuillez remplir tous les champs obligatoires (*) !");
+      return;
+    }
+  // Vérifier si le workflow avec ce nom existe déjà
+  const workflowExists = workflows.some(wf => wf.name.toLowerCase() === name.trim().toLowerCase());
+  
+  if (workflowExists) {
+    setNameError('Un workflow avec ce nom existe déjà !'); // Affiche l'erreur
+    return;
+  } else {
+    setNameError(''); // Réinitialiser l'erreur si le nom est valide
+  }
+
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('http://localhost:5000/api/workflows', {
@@ -155,6 +206,7 @@ const filteredWorkflows = workflows.filter(wf => {
       toast.error("Erreur création.");
     }
   };
+  
 
   const [editingWorkflow, setEditingWorkflow] = useState(null);
 
@@ -224,113 +276,147 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
       <Chatbot />
 
       <div className="m-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
-  {/* Bouton à gauche */}
-  <div>
-    <Button variant="secondary" onClick={handleModalShow}>Créer un workflow</Button>
-  </div>
-
   {/* Filtres à droite */}
-  <div className="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-    <Form.Select
-      style={{ width: '160px' }}
-      value={filterStatus}
-      onChange={e => setFilterStatus(e.target.value)}
-    >
-      <option value="">Tous les statuts</option>
-      <option value="pending">En attente</option>
-      <option value="assigned">Assigné</option>
-      <option value="in_progress">En cours</option>
-      <option value="completed">Terminé</option>
-    </Form.Select>
+<div className="d-flex align-items-center gap-2 flex-wrap justify-content-end ms-auto">
+  <Form.Select
+    style={{ width: '200px' }}
+    value={filterStatus}
+    onChange={e => setFilterStatus(e.target.value)}
+  >
+    <option value="">Tous les statuts</option>
+    <option value="pending">En attente</option>
+    <option value="cancelled">Annulé</option>
+    <option value="in_progress">En cours</option>
+    <option value="completed">Terminé</option>
+  </Form.Select>
 
-    <Form.Select
-      style={{ width: '160px' }}
-      value={filterPriority}
-      onChange={e => setFilterPriority(e.target.value)}
-    >
-      <option value="">Toutes les priorités</option>
-      <option value="élevée">haute</option>
-      <option value="moyenne">Moyenne</option>
-      <option value="faible">basse</option>
-    </Form.Select>
+  <Form.Select
+    style={{ width: '200px' }}
+    value={filterPriority}
+    onChange={e => setFilterPriority(e.target.value)}
+  >
+    <option value="">Toutes les priorités</option>
+    <option value="élevée">Haute</option>
+    <option value="moyenne">Moyenne</option>
+    <option value="faible">Basse</option>
+  </Form.Select>
 
-    <Form.Control
-  type="date"
-  value={dateFilter}
-  onChange={e => setDateFilter(e.target.value)}
-  style={{ width: '180px', marginRight: '10px' }}
-/>
+  <Form.Control
+    type="date"
+    value={dateFilter}
+    onChange={e => setDateFilter(e.target.value)}
+    style={{ width: '200px', marginRight: '10px' }}
+  />
 
-
-    <Form.Control
-      type="text"
-      placeholder="Rechercher..."
-      style={{ width: '200px' }}
-      value={search}
-      onChange={e => setSearch(e.target.value)}
-    />
-  </div>
+  <Form.Control
+    type="text"
+    placeholder="Rechercher..."
+    style={{ width: '270px' }}
+    value={search}
+    onChange={e => setSearch(e.target.value)}
+  />
 </div>
 
+</div>
+{/* Bouton pour créer un nouveau workflow */}
+<div className="d-flex gap-2 align-items-end flex-wrap w-100 ms-4 mb-4">
+  <Form.Control
+    placeholder="Nom*"
+    value={newWorkflow.name}
+    onChange={e => setNewWorkflow({ ...newWorkflow, name: e.target.value })}
+    style={{ maxWidth: '250px' }}
+  />
+      <Form.Control
+        placeholder="Description*"
+        value={newWorkflow.description}
+        onChange={e => setNewWorkflow({ ...newWorkflow, description: e.target.value })}
+        style={{ maxWidth: '250px' }}
+      />
+      <Form.Control
+        type="date"
+        value={newWorkflow.echeance}
+        onChange={e => setNewWorkflow({ ...newWorkflow, echeance: e.target.value })}
+        style={{ maxWidth: '220px' }}
+        min={new Date().toISOString().split('T')[0]} 
+      />
+      <Form.Select
+        value={newWorkflow.priorite}
+        onChange={e => setNewWorkflow({ ...newWorkflow, priorite: e.target.value })}
+        style={{ maxWidth: '220px' }}
+      >
+        <option value="">Priorité*</option>
+        <option value="élevée">Haute</option>
+        <option value="moyenne">Moyenne</option>
+        <option value="faible">Basse</option>
+      </Form.Select>
+      <Button
+  variant="primary"
+  onClick={handleCreateWorkflow}
+  disabled={
+    !newWorkflow.name.trim() ||
+    !newWorkflow.description.trim() ||
+    !newWorkflow.echeance ||
+    !newWorkflow.priorite
+  }
+>
+  Créer un workflow
+</Button>
+{nameError && <Form.Text className="text-danger">{nameError}</Form.Text>} {/* Affichage de l'erreur */}
 
+    </div>
+{editingWorkflow && (
+  <Modal show={showModal} onHide={handleModalClose} style={{ zIndex: 1050, width: '100%' }}>
+    <Modal.Header closeButton>
+      <Modal.Title>Modifier un workflow</Modal.Title>
+    </Modal.Header>
+    <Modal.Body>
+      <Form>
+        <Form.Group>
+          <Form.Label>Nom</Form.Label>
+          <Form.Control
+            type="text"
+            value={editingWorkflow.name}
+            onChange={e => setEditingWorkflow({ ...editingWorkflow, name: e.target.value })}
+          />
+        </Form.Group>
+        <Form.Group className="mt-2">
+          <Form.Label>Description</Form.Label>
+          <Form.Control
+            as="textarea"
+            rows={3}
+            value={editingWorkflow.description}
+            onChange={e => setEditingWorkflow({ ...editingWorkflow, description: e.target.value })}
+          />
+        </Form.Group>
+        <Form.Group className="mt-2">
+          <Form.Label>Échéance</Form.Label>
+          <Form.Control
+            type="date"
+            value={formatDateForInput(editingWorkflow.echeance)}
+            onChange={e => setEditingWorkflow({ ...editingWorkflow, echeance: e.target.value })}
+          />
+        </Form.Group>
+        <Form.Group className="mt-2">
+          <Form.Label>Priorité</Form.Label>
+          <Form.Select
+            value={editingWorkflow.priorite}
+            onChange={e => setEditingWorkflow({ ...editingWorkflow, priorite: e.target.value })}
+          >
+            <option value="">Sélectionner</option>
+            <option value="élevée">haute</option>
+            <option value="moyenne">Moyenne</option>
+            <option value="faible">basse</option>
+          </Form.Select>
+        </Form.Group>
+      </Form>
+    </Modal.Body>
+    <Modal.Footer>
+      <Button variant="secondary" onClick={handleModalClose}>Annuler</Button>
+      <Button variant="primary" onClick={handleUpdateWorkflow}>Modifier</Button>
+    </Modal.Footer>
+  </Modal>
+)}
 
-      <Modal show={showModal} onHide={handleModalClose} style={{ zIndex: 1050, width: '100%' }}>
-        <Modal.Header closeButton>
-          <Modal.Title>{editingWorkflow ? "Modifier" : "Créer"} un workflow</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form>
-            <Form.Group>
-              <Form.Label>Nom</Form.Label>
-              <Form.Control type="text" value={editingWorkflow ? editingWorkflow.name : newWorkflow.name}
-                onChange={e => editingWorkflow ?
-                  setEditingWorkflow({ ...editingWorkflow, name: e.target.value }) :
-                  setNewWorkflow({ ...newWorkflow, name: e.target.value })} />
-            </Form.Group>
-            <Form.Group className="mt-2">
-              <Form.Label>Description</Form.Label>
-              <Form.Control as="textarea" rows={3}
-                value={editingWorkflow ? editingWorkflow.description : newWorkflow.description}
-                onChange={e => editingWorkflow ?
-                  setEditingWorkflow({ ...editingWorkflow, description: e.target.value }) :
-                  setNewWorkflow({ ...newWorkflow, description: e.target.value })} />
-            </Form.Group>
-            <Form.Group className="mt-2">
-              <Form.Label>Échéance</Form.Label>
-              <Form.Control type="date"
-                value={
-                  editingWorkflow
-                    ? formatDateForInput(editingWorkflow.echeance)
-                    : newWorkflow.echeance
-                }
-                onChange={e => editingWorkflow
-                  ? setEditingWorkflow({ ...editingWorkflow, echeance: e.target.value })
-                  : setNewWorkflow({ ...newWorkflow, echeance: e.target.value })
-                }
-              />
-            </Form.Group>
-            <Form.Group className="mt-2">
-              <Form.Label>Priorité</Form.Label>
-              <Form.Select
-                value={editingWorkflow ? editingWorkflow.priorite : newWorkflow.priorite}
-                onChange={e => editingWorkflow ?
-                  setEditingWorkflow({ ...editingWorkflow, priorite: e.target.value }) :
-                  setNewWorkflow({ ...newWorkflow, priorite: e.target.value })}>
-                <option value="">Sélectionner</option>
-                <option value="élevée">haute</option>
-                <option value="moyenne">Moyenne</option>
-                <option value="faible">basse</option>
-              </Form.Select>
-            </Form.Group>
-          </Form>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={handleModalClose}>Annuler</Button>
-          <Button variant="primary" onClick={editingWorkflow ? handleUpdateWorkflow : handleCreateWorkflow}>
-            {editingWorkflow ? "Modifier" : "Créer"}
-          </Button>
-        </Modal.Footer>
-      </Modal>
       <Modal show={showDeleteModal} onHide={() => setShowDeleteModal(false)} style={{ zIndex: 1050, width: '100%' }}>
   <Modal.Header closeButton>
     <Modal.Title>Confirmer la suppression</Modal.Title>
@@ -369,19 +455,38 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
                   <td>{new Date(wf.echeance).toLocaleDateString()}</td>
                   <td>{wf.priorite}</td>
                   <td>
-                    <span className={`badge bg-${getStatusColor(status)}`}>
-                      {status === 'pending' && 'En attente'}
-                      {status === 'assigned' && 'Assigné'}
-                      {status === 'in_progress' && 'En cours'}
-                      {status === 'completed' && 'Terminé'}
-                    </span>
-                  </td>
+  <span className={`badge bg-${getStatusColor(status)} text-white`}>
+    {getStatusIcon(status)} {getStatusLabel(status)}
+  </span>
+</td>
+
                   <td>{tasks.filter(t => t.workflow_id === wf.id).length} tâche(s)</td>
                   <td>
-                    <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditClick(wf)}>Modifier</Button>
-                    <Button variant="danger" size="sm" className="me-2" onClick={() => handleDeleteConfirm(wf.id, wf.name)}>Supprimer</Button>
-                    <Button variant="info" size="sm" onClick={() => handleDetailsClick(wf.id)}>Tâches</Button>
+                    <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditClick(wf)} title="Modifier">
+                      <i class="bi bi-pencil-square"></i>
+                    </Button>
+
+
+                    <Button variant="danger" size="sm" className="me-2" onClick={() => handleDeleteConfirm(wf.id, wf.name)} title="Supprimer">
+                      <i class="bi bi-trash"></i>
+                    </Button>
+
+
+                    <Button variant="info" size="sm" className="me-2" onClick={() => handleDetailsClick(wf.id)} title="Tâches">
+                      <i class="bi bi-list-ul"></i>
+                    </Button>
+
+
+                    <Button variant="success" size="sm" className="me-2" title="Valider">
+                      <i class="bi bi-check-circle"></i>
+                    </Button>
+
+
+                    <Button variant="secondary" size="sm" title="Rejeter">
+                      <i class="bi bi-x-circle"></i>
+                    </Button>
                   </td>
+
                 </tr>
               )
             })}

@@ -27,7 +27,7 @@ const AssignedTasks = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [stats, setStats] = useState({
     pending: 0,
-    assigned: 0,
+    cancelled: 0,
     in_progress: 0,
     completed: 0,
   });
@@ -74,7 +74,7 @@ const AssignedTasks = () => {
         setTasks(assignedTasks);
         const statusCounts = {
             pending: 0,
-            assigned: 0,
+            cancelled: 0,
             in_progress: 0,
             completed: 0,
           };
@@ -98,7 +98,7 @@ const AssignedTasks = () => {
   const getStatusColor = (status) => {
     switch (status) {
       case 'pending': return 'secondary';
-      case 'assigned': return 'warning';
+      case 'cancelled': return 'danger';
       case 'in_progress': return 'primary';
       case 'completed': return 'success';
       default: return 'light';
@@ -227,7 +227,7 @@ const AssignedTasks = () => {
   >
     <option value="">Filtrer par statut</option>
     <option value="pending">En attente</option>
-    <option value="assigned">Assignée</option>
+    <option value="cancelled">Annulée</option>
     <option value="in_progress">En cours</option>
     <option value="completed">Terminée</option>
   </Form.Control>
@@ -283,18 +283,18 @@ const AssignedTasks = () => {
     </div>
   </div>
   <div className="col-md-3">
-    <div className="card text-white bg-warning shadow">
-      <div className="card-body">
-        <h5 className="card-title">📌 Assignées</h5>
-        <p className="card-text fs-4">{stats.assigned}</p>
-      </div>
-    </div>
-  </div>
-  <div className="col-md-3">
     <div className="card text-white bg-secondary shadow">
       <div className="card-body">
         <h5 className="card-title">⏳ En attente</h5>
         <p className="card-text fs-4">{stats.pending}</p>
+      </div>
+    </div>
+  </div>
+  <div className="col-md-3">
+    <div className="card text-white bg-danger shadow">
+      <div className="card-body">
+        <h5 className="card-title">❌ Annulées</h5>
+        <p className="card-text fs-4">{stats.cancelled}</p>
       </div>
     </div>
   </div>
@@ -355,7 +355,7 @@ const AssignedTasks = () => {
                     onChange={(e) => handleStatusChange(task.id, e.target.value)}
                   >
                     <option value="pending" className="text-dark">⏳ En attente</option>
-                    <option value="assigned" className="text-dark">📌 Assignée</option>
+                    <option value="cancelled" className="text-dark">❌ Annulée</option>
                     <option value="in_progress" className="text-dark">🔧 En cours</option>
                     <option value="completed" className="text-dark">✅ Terminée</option>
                   </select>

@@ -18,6 +18,8 @@ import Accueil from './components/Accueil';
 import Register from './components/Register';
 import Folder from './components/Folder';
 import DocumentDetails from './components/DocumentDetails';
+import Test from './components/test'; // Importer le composant Test
+import Notif from './components/Notification';
 
 function App() {
   return (
@@ -26,6 +28,7 @@ function App() {
         <Routes>
           {/* Route non protégée */}
           <Route path="/" element={<Login />} />
+          <Route path="/test" element={<Test />} />
           {/* Routes protégées */}
           <Route path="/accueil" element={<ProtectedRoute element={<Accueil />} />} />
           <Route path="/groupe" element={<ProtectedRoute element={<Groupe />} />} />
@@ -41,6 +44,7 @@ function App() {
           <Route path="/details_workflow/:id" element={<ProtectedRoute element={<DetailsWorkflow />} />} />
           <Route path="/register" element={<ProtectedRoute element={<Register />} />} />
           <Route path="/Documents/:id" element={<ProtectedRoute element={<DocumentDetails />} />} />
+          <Route path="/notif" element={<ProtectedRoute element={<Notif />} />} />
         </Routes>
       </Container>
     </Router>

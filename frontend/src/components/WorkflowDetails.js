@@ -23,6 +23,7 @@ const [filterDueDate, setFilterDueDate] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [nameError, setNameError] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -201,12 +202,25 @@ const [filterDueDate, setFilterDueDate] = useState('');
   const handleSelectChange = selected => {
     setFormData(prev => ({ ...prev, assigned_to: selected.map(s => s.value) }));
   };
-
+ 
   const handleSubmit = async e => {
     e.preventDefault();
+
+    setNameError('');  // Réinitialise l'erreur avant chaque soumission
+
+    // Vérification si une tâche avec le même nom existe déjà dans le workflow
+    // Vérification si une tâche avec le même nom existe déjà dans le workflow
+  const existingTask = tasks.find(task => task.title.toLowerCase() === formData.title.toLowerCase());
+
+  if (existingTask) {
+    setNameError('Une tâche avec ce nom existe déjà dans ce workflow!');
+    return;
+  }
+
     const data = new FormData();
     const user = JSON.parse(localStorage.getItem('user'));
   
+    // Ajout des données du formulaire
     for (const key in formData) {
       if (key === 'assigned_to') {
         data.append(key, JSON.stringify(formData[key]));
@@ -215,24 +229,28 @@ const [filterDueDate, setFilterDueDate] = useState('');
       }
     }
   
+    // Ajout du workflow_id
     const workflowIdToUse = workflowInfo?.id || id;
     if (workflowIdToUse) {
       console.log("Ajout du workflow_id:", workflowIdToUse);
-      data.set('workflow_id', workflowIdToUse); // 👈 Utilise .set ici
+      data.set('workflow_id', workflowIdToUse); // Utilisation de .set ici
     } else {
       console.error("workflow_id introuvable !");
     }
   
+    // Ajout du créateur
     if (user?.id) {
       data.append('created_by', user.id);
     }
   
+    // Définir l'URL de l'API
     const endpoint = editingTask
       ? `http://localhost:5000/api/tasks/${editingTask.id}`
       : 'http://localhost:5000/api/tasks/';
   
     try {
-      await axios({
+      // Envoi des données pour la création ou mise à jour de la tâche
+      const response = await axios({
         method: editingTask ? 'put' : 'post',
         url: endpoint,
         data,
@@ -242,6 +260,34 @@ const [filterDueDate, setFilterDueDate] = useState('');
         }
       });
   
+      // Si la tâche est nouvellement créée, récupérer son ID
+      if (!editingTask) {
+        const newTask = response.data;  // Assurez-vous que le backend renvoie les informations de la tâche créée, y compris son ID
+        const taskId = newTask.id;
+        console.log("ID de la nouvelle tâche :", taskId); // Vous pouvez maintenant utiliser cet ID comme vous en avez besoin
+
+        console.log('FormData ID:', taskId);
+        const notificationData = {
+          user_id: formData.assigned_to,  // ID de l'utilisateur assigné
+          message: `Vous avez une nouvelle tâche : ${formData.title}`,
+          type: 'task',  // Type de la notification (peut être utilisé pour filtrer dans l'interface utilisateur)
+          related_task_id: taskId ? taskId: null, 
+          created_at: new Date()
+        };
+  
+        try {
+          await axios.post('http://localhost:5000/api/notifications', notificationData, {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          console.log("Notification interne envoyée");
+        } catch (err) {
+          console.error("Erreur lors de l'envoi de la notification interne", err);
+        }
+      }
+  
+      // Notification par email si la tâche est nouvellement créée
       if (!editingTask && formData.notify) {
         try {
           await axios.post('http://localhost:5000/api/tasks/notify', {
@@ -254,18 +300,21 @@ const [filterDueDate, setFilterDueDate] = useState('');
               Authorization: `Bearer ${localStorage.getItem('token')}`
             }
           });
-          console.log("Notification envoyée");
+          console.log("Notification par email envoyée");
         } catch (err) {
-          console.error("Erreur lors de l'envoi de la notification", err);
+          console.error("Erreur lors de l'envoi de la notification par email", err);
         }
       }
   
+      // Rafraîchir les tâches et fermer le modal
       fetchTasks();
       closeModal();
+  
     } catch (err) {
       console.error("Erreur d'enregistrement :", err);
     }
   };
+
   
   
 
@@ -318,15 +367,7 @@ const [filterDueDate, setFilterDueDate] = useState('');
   
   const currentTasks = filteredTasks.slice((currentPage - 1) * tasksPerPage, currentPage * tasksPerPage);
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'pending': return 'secondary';
-      case 'assigned': return 'info';
-      case 'in_progress': return 'warning';
-      case 'completed': return 'success';
-      default: return 'light';
-    }
-  };
+ 
   
   const handleStatusChange = async (taskId, newStatus) => {
     try {
@@ -372,7 +413,58 @@ const [filterDueDate, setFilterDueDate] = useState('');
     }
   ];
   
-  
+  const isFormValid = formData.title.trim() !== '' &&
+                    formData.due_date.trim() !== '' &&
+                    formData.priority.trim() !== '' &&
+                    formData.assigned_to.length > 0;
+
+
+                    const getStatusColor = (status) => {
+                        switch (status) {
+                          case 'pending':
+                            return 'secondary'; // gris
+                          case 'in_progress':
+                            return 'primary'; // bleu
+                          case 'completed':
+                            return 'success'; // vert
+                          case 'cancelled':
+                            return 'danger'; // rouge
+                          default:
+                            return 'secondary';
+                        }
+                      };
+                      
+                      const getStatusIcon = (status) => {
+                        switch (status) {
+                          case 'pending':
+                            return '⏳';
+                          case 'in_progress':
+                            return '🔧';
+                          case 'completed':
+                            return '✅';
+                          case 'cancelled':
+                            return '❌';
+                          default:
+                            return '';
+                        }
+                      };
+                      
+                      const getStatusLabel = (status) => {
+                        switch (status) {
+                          case 'pending':
+                            return 'En attente';
+                          case 'in_progress':
+                            return 'En cours';
+                          case 'completed':
+                            return 'Terminée';
+                          case 'cancelled':
+                            return 'Annulée';
+                          default:
+                            return '';
+                        }
+                      };
+                      
+
   return (
     <div className="container-fluid mt-4">
         {/* Tâches */}
@@ -397,9 +489,9 @@ const [filterDueDate, setFilterDueDate] = useState('');
     >
       <option value="">Tous les statuts</option>
       <option value="pending">En attente</option>
-      <option value="assigned">Assigné</option>
+      <option value="cancelled">Annulée</option>
       <option value="in_progress">En cours</option>
-      <option value="completed">Terminé</option>
+      <option value="completed">Terminée</option>
     </Form.Select>
 
     <Form.Select
@@ -447,6 +539,7 @@ const [filterDueDate, setFilterDueDate] = useState('');
                 <th>Échéance</th>
                 <th>Priorité</th>
                 <th>Statut</th>
+                <th>Note</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -456,10 +549,12 @@ const [filterDueDate, setFilterDueDate] = useState('');
                   <td>{task.title}</td>
                   <td>{task.description}</td>
                   <td>
-                    {task.file_path && (
-                      <a href={`http://localhost:5000${task.file_path}`} target="_blank" rel="noreferrer">Voir</a>
-                    )}
-                  </td>
+  {task.file_path && (
+    <a href={`http://localhost:5000${task.file_path}`} target="_blank" rel="noreferrer">
+      <i className="bi bi-file-earmark-text" style={{ fontSize: '1.5rem' }}></i>
+    </a>
+  )}
+</td>
                   <td>
                     {users
                       .filter(u => task.assigned_to?.includes(u.value))
@@ -470,17 +565,12 @@ const [filterDueDate, setFilterDueDate] = useState('');
                   <td>{task.priority}</td>
                   
                   <td>
-                  <select
-                    value={task.status}
-                    className={`form-select form-select-sm bg-${getStatusColor(task.status)} text-white`}
-                    onChange={(e) => handleStatusChange(task.id, e.target.value)}
-                  >
-                    <option value="pending" className="text-dark">⏳ En attente</option>
-                    <option value="assigned" className="text-dark">📌 Assignée</option>
-                    <option value="in_progress" className="text-dark">🔧 En cours</option>
-                    <option value="completed" className="text-dark">✅ Terminée</option>
-                  </select>
-                      </td>
+  <span className={`badge bg-${getStatusColor(task.status)} text-white`}>
+    {getStatusIcon(task.status)} {getStatusLabel(task.status)}
+  </span>
+</td>
+                    <td>{task.assignment_note || 'Aucune note'}</td>
+
                   <td>
                     <Button size="sm" variant="warning" onClick={() => openModal(task)}>Modifier</Button>{' '}
                     <Button size="sm" variant="danger" onClick={() => handleDelete(task.id)}>Supprimer</Button>{' '}
@@ -514,15 +604,19 @@ const [filterDueDate, setFilterDueDate] = useState('');
         <Modal.Body>
           <Form onSubmit={handleSubmit}>
             <Form.Group>
-              <Form.Label>Titre</Form.Label>
+              <Form.Label>
+  Titre { !editingTask && <span style={{ color: 'red' }}>*</span> }
+</Form.Label>
               <Form.Control name="title" value={formData.title} onChange={handleInputChange} required />
+              {!editingTask && nameError && <Form.Text className="text-danger">{nameError}</Form.Text>} {/* Affichage de l'erreur */}
+            
             </Form.Group>
             <Form.Group>
               <Form.Label>Description</Form.Label>
-              <Form.Control as="textarea" name="description" value={formData.description} onChange={handleInputChange} required />
+              <Form.Control as="textarea" name="description" value={formData.description} onChange={handleInputChange} />
             </Form.Group>
-            <Form.Group>
-  <Form.Label>Échéance</Form.Label>
+           <Form.Group>
+  <Form.Label>Échéance { !editingTask && <span style={{ color: 'red' }}>*</span> }</Form.Label>
   <Form.Control
     type="date"
     name="due_date"
@@ -533,8 +627,8 @@ const [filterDueDate, setFilterDueDate] = useState('');
   />
 </Form.Group>
             <Form.Group>
-              <Form.Label>Priorité</Form.Label>
-              <Form.Select name="priority" value={formData.priority} onChange={handleInputChange}>
+              <Form.Label>Priorité { !editingTask && <span style={{ color: 'red' }}>*</span> }</Form.Label>
+              <Form.Select name="priority" value={formData.priority} onChange={handleInputChange} required>
                 <option value="">Choisir...</option>
                 <option value="Haute">Haute</option>
                 <option value="Moyenne">Moyenne</option>
@@ -542,9 +636,10 @@ const [filterDueDate, setFilterDueDate] = useState('');
               </Form.Select>
             </Form.Group>
             <Form.Group>
-  <Form.Label>Assigner à</Form.Label>
+  <Form.Label>Assigner à { !editingTask && <span style={{ color: 'red' }}>*</span> }</Form.Label>
   <Select
     isMulti
+    required
     options={groupedOptions}
     value={groupedOptions
       .flatMap(group => group.options)
@@ -587,9 +682,15 @@ const [filterDueDate, setFilterDueDate] = useState('');
   />
 </Form.Group>
 
-            <Button variant="primary" type="submit" className="mt-3">
-              {editingTask ? 'Modifier' : 'Créer'}
-            </Button>
+            <Button
+  variant="primary"
+  type="submit"
+  className="mt-3"
+  disabled={!editingTask && !isFormValid} // 👈 disable seulement en mode ajout
+>
+  {editingTask ? 'Modifier' : 'Ajouter Tâche'} 
+</Button>
+
           </Form>
         </Modal.Body>
       </Modal>
