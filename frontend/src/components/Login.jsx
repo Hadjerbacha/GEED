@@ -16,7 +16,7 @@ const Login = () => {
     const { data: res } = await axios.post(url, data);
     localStorage.setItem("token", res.token);
     localStorage.setItem("user", JSON.stringify(res.user));
-    window.location = "/accueil"; // Redirection vers la page d'accueil
+    window.location = "/documents"; // Redirection vers la page d'accueil
 		} catch (error) {
 			if (
 				error.response &&
@@ -33,7 +33,7 @@ const Login = () => {
 			<div className={styles.login_form_container}>
 				<div className={styles.left}>
 					<form className={styles.form_container} onSubmit={handleSubmit} method="post">
-						<img className={styles.img} src="11.png" alt="logoapp"/><br/><br/>
+						<img className={styles.img} src="login-.png" alt="logoapp"/><br/><br/>
 						<input
 							type="email"
 							placeholder="Email"
