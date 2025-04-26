@@ -79,7 +79,7 @@ const Workflow = () => {
     const statuses = workflowTasks.map(task => task.status);
     if (statuses.every(s => s === 'completed')) return 'completed';
     if (statuses.includes('pending')) return 'pending';
-    if (statuses.includes('assigned')) return 'assigned';
+    if (statuses.includes('cancelled')) return 'cancelled';
     if (statuses.includes('in_progress')) return 'in_progress';
 
     return 'pending';
@@ -116,11 +116,46 @@ const filteredWorkflows = workflows.filter(wf => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'pending': return 'secondary';
-      case 'assigned': return 'info';
-      case 'in_progress': return 'warning';
-      case 'completed': return 'success';
-      default: return 'light';
+      case 'pending':
+        return 'secondary'; // gris
+      case 'in_progress':
+        return 'primary'; // bleu
+      case 'completed':
+        return 'success'; // vert
+      case 'cancelled':
+        return 'danger'; // rouge
+      default:
+        return 'secondary';
+    }
+  };
+  
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'pending':
+        return '⏳';
+      case 'in_progress':
+        return '🔧';
+      case 'completed':
+        return '✅';
+      case 'cancelled':
+        return '❌';
+      default:
+        return '';
+    }
+  };
+  
+  const getStatusLabel = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'En attente';
+      case 'in_progress':
+        return 'En cours';
+      case 'completed':
+        return 'Terminée';
+      case 'cancelled':
+        return 'Annulée';
+      default:
+        return '';
     }
   };
 
@@ -136,8 +171,24 @@ const filteredWorkflows = workflows.filter(wf => {
   };
 
   const handleModalShow = () => setShowModal(true);
-
+  const [nameError, setNameError] = useState('');
   const handleCreateWorkflow = async () => {
+    const { name, description, echeance, priorite } = newWorkflow;
+    
+    if (!name.trim() || !description.trim() || !echeance || !priorite) {
+      toast.error("Veuillez remplir tous les champs obligatoires (*) !");
+      return;
+    }
+  // Vérifier si le workflow avec ce nom existe déjà
+  const workflowExists = workflows.some(wf => wf.name.toLowerCase() === name.trim().toLowerCase());
+  
+  if (workflowExists) {
+    setNameError('Un workflow avec ce nom existe déjà !'); // Affiche l'erreur
+    return;
+  } else {
+    setNameError(''); // Réinitialiser l'erreur si le nom est valide
+  }
+
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post('http://localhost:5000/api/workflows', {
@@ -155,6 +206,7 @@ const filteredWorkflows = workflows.filter(wf => {
       toast.error("Erreur création.");
     }
   };
+  
 
   const [editingWorkflow, setEditingWorkflow] = useState(null);
 
@@ -233,7 +285,7 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
   >
     <option value="">Tous les statuts</option>
     <option value="pending">En attente</option>
-    <option value="assigned">Assigné</option>
+    <option value="cancelled">Annulé</option>
     <option value="in_progress">En cours</option>
     <option value="completed">Terminé</option>
   </Form.Select>
@@ -267,15 +319,15 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
 
 </div>
 {/* Bouton pour créer un nouveau workflow */}
-<div className="d-flex gap-2 align-items-end flex-wrap w-100 ms-4">
+<div className="d-flex gap-2 align-items-end flex-wrap w-100 ms-4 mb-4">
+  <Form.Control
+    placeholder="Nom*"
+    value={newWorkflow.name}
+    onChange={e => setNewWorkflow({ ...newWorkflow, name: e.target.value })}
+    style={{ maxWidth: '250px' }}
+  />
       <Form.Control
-        placeholder="Nom"
-        value={newWorkflow.name}
-        onChange={e => setNewWorkflow({ ...newWorkflow, name: e.target.value })}
-        style={{ maxWidth: '250px' }}
-      />
-      <Form.Control
-        placeholder="Description"
+        placeholder="Description*"
         value={newWorkflow.description}
         onChange={e => setNewWorkflow({ ...newWorkflow, description: e.target.value })}
         style={{ maxWidth: '250px' }}
@@ -285,23 +337,33 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
         value={newWorkflow.echeance}
         onChange={e => setNewWorkflow({ ...newWorkflow, echeance: e.target.value })}
         style={{ maxWidth: '220px' }}
+        min={new Date().toISOString().split('T')[0]} 
       />
       <Form.Select
         value={newWorkflow.priorite}
         onChange={e => setNewWorkflow({ ...newWorkflow, priorite: e.target.value })}
         style={{ maxWidth: '220px' }}
       >
-        <option value="">Priorité</option>
+        <option value="">Priorité*</option>
         <option value="élevée">Haute</option>
         <option value="moyenne">Moyenne</option>
         <option value="faible">Basse</option>
       </Form.Select>
-      <Button variant="primary" onClick={handleCreateWorkflow} style={{ width: '15%' }}>
-  Ajouter workflow
+      <Button
+  variant="primary"
+  onClick={handleCreateWorkflow}
+  disabled={
+    !newWorkflow.name.trim() ||
+    !newWorkflow.description.trim() ||
+    !newWorkflow.echeance ||
+    !newWorkflow.priorite
+  }
+>
+  Créer un workflow
 </Button>
+{nameError && <Form.Text className="text-danger">{nameError}</Form.Text>} {/* Affichage de l'erreur */}
 
     </div>
-
 {editingWorkflow && (
   <Modal show={showModal} onHide={handleModalClose} style={{ zIndex: 1050, width: '100%' }}>
     <Modal.Header closeButton>
@@ -393,13 +455,11 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
                   <td>{new Date(wf.echeance).toLocaleDateString()}</td>
                   <td>{wf.priorite}</td>
                   <td>
-                    <span className={`badge bg-${getStatusColor(status)}`}>
-                      {status === 'pending' && 'En attente'}
-                      {status === 'assigned' && 'Assigné'}
-                      {status === 'in_progress' && 'En cours'}
-                      {status === 'completed' && 'Terminé'}
-                    </span>
-                  </td>
+  <span className={`badge bg-${getStatusColor(status)} text-white`}>
+    {getStatusIcon(status)} {getStatusLabel(status)}
+  </span>
+</td>
+
                   <td>{tasks.filter(t => t.workflow_id === wf.id).length} tâche(s)</td>
                   <td>
                     <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditClick(wf)} title="Modifier">

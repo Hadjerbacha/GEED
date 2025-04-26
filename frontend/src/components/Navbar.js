@@ -6,15 +6,15 @@ import '../style/Navbar.css';
 import { IconContext } from 'react-icons';
 import { jwtDecode } from 'jwt-decode';
 import Dropdown from 'react-bootstrap/Dropdown';
+import axios from 'axios';
 
 const Navbar = () => {
   const [sidebar, setSidebar] = useState(false);
   const [users, setUsers] = useState([]);
   const [userId, setUserId] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0); // Nouvel état pour compter les notifications non lues
   const navigate = useNavigate();
-
-
 
   const showSidebar = () => setSidebar(!sidebar);
 
@@ -28,13 +28,10 @@ const Navbar = () => {
     const token = localStorage.getItem('token');
     if (token) {
       const decoded = jwtDecode(token);
-      console.log("Token décodé:", decoded);
       setUserId(decoded.id); // ici tu fixes le problème
     }
   }, []);
   
-  
-
   // Récupérer la liste des utilisateurs
   useEffect(() => {
     fetch('http://localhost:5000/api/auth/users')
@@ -53,10 +50,16 @@ const Navbar = () => {
 
   useEffect(() => {
     if (currentUser) {
-      console.log("Utilisateur connecté :", currentUser);
+      // Récupérer les notifications non lues
+      axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`)
+        .then(res => {
+          const unreadCount = res.data.filter(notification => !notification.is_read).length;
+          setUnreadNotificationsCount(unreadCount); // Mettre à jour le nombre de notifications non lues
+        })
+        .catch(err => console.error("Erreur notifications :", err));
     }
   }, [currentUser]);
-  
+
   // Menu selon rôle
   const sidebarItems = [
     {
@@ -69,17 +72,11 @@ const Navbar = () => {
       path: '/AdminUsers',
       icon: <FaIcons.FaUserPlus />,
     },
-    
     {
       title: 'Documents',
       path: '/documents',
       icon: <FaIcons.FaPlus />,
     },
-    /*{
-      title: 'Workflows',
-      path: '/workflows',
-      icon: <FaIcons.FaTasks />,
-    },*/
     {
       title: 'Workflows',
       path: '/workflow',
@@ -90,6 +87,27 @@ const Navbar = () => {
       path: '/mes-taches',
       icon: <FaIcons.FaUserCheck />,
     },
+    {
+      title: 'Notifications',
+      path: '/notif',
+      icon: (
+        <div className="notification-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
+          <FaIcons.FaBell />
+          {unreadNotificationsCount > 0 && (
+            <span className="badge" style={{ 
+              backgroundColor: 'red', 
+              color: 'white', 
+              borderRadius: '50%', 
+              padding: '2px 6px', 
+              fontSize: '12px', 
+              marginLeft: '5px' 
+            }}>
+              {unreadNotificationsCount}
+            </span>
+          )}
+        </div>
+      )
+    },    
     {
       title: 'Tableau de bord',
       path: '/document',
@@ -105,31 +123,29 @@ const Navbar = () => {
   return (
     <IconContext.Provider value={{ color: '#000' }}>
       <div className="navbar">
-      <div className="navbar-content">
+        <div className="navbar-content">
           <Link to="#" className="menu-bars">
             <FaIcons.FaBars onClick={showSidebar} />
           </Link>
 
           <img src="/11.png" alt="Logo" width="100" height="50" style={{ marginLeft: 'auto', marginRight: 'auto' }} />
           {currentUser ? (
-  <Dropdown>
-    <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
-      {currentUser.name} {currentUser.prenom}
-    </Dropdown.Toggle>
+            <Dropdown>
+              <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
+                {currentUser.name} {currentUser.prenom}
+              </Dropdown.Toggle>
 
-    <Dropdown.Menu>
-      <Dropdown.Item href="/help">Aide</Dropdown.Item>
-      <Dropdown.Divider />
-      <Dropdown.Item onClick={handleLogout} className="text-danger">
-        Déconnexion
-      </Dropdown.Item>
-    </Dropdown.Menu>
-  </Dropdown>
-) : (
-  <div className="text-danger">Aucun utilisateur connecté</div>
-)}
-
-
+              <Dropdown.Menu>
+                <Dropdown.Item href="/help">Aide</Dropdown.Item>
+                <Dropdown.Divider />
+                <Dropdown.Item onClick={handleLogout} className="text-danger">
+                  Déconnexion
+                </Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown>
+          ) : (
+            <div className="text-danger">Aucun utilisateur connecté</div>
+          )}
         </div>
       </div>
 
@@ -141,18 +157,16 @@ const Navbar = () => {
             </Link>
           </li>
 
-          
-
           {sidebarItems
-  .filter(Boolean)
-  .map((item, index) => (
-    <li key={index} className="nav-text">
-      <Link to={item.path}>
-        {item.icon}
-        <span className="ms-2">{item.title}</span>
-      </Link>
-    </li>
-))}
+            .filter(Boolean)
+            .map((item, index) => (
+              <li key={index} className="nav-text">
+                <Link to={item.path}>
+                  {item.icon}
+                  <span className="ms-2">{item.title}</span>
+                </Link>
+              </li>
+            ))}
         </ul>
       </nav>
     </IconContext.Provider>
