@@ -490,16 +490,19 @@ const Document = () => {
                     {doc.version ? `(version ${doc.version})` : ''}
 
                   </td>
-                  <td>  <button
-                    onClick={() => {
-                      window.open(`http://localhost:5000${selectedDoc.file_path}`, '_blank');
-                      setShowModal(false);
-                    }}
-                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
-                    style={{ all: 'unset', cursor: 'pointer' }}
-                  >
-                    📄
-                  </button>
+                  <td>
+                    <button
+                      onClick={() => {
+                        setSelectedDoc(doc);  // Mettez à jour selectedDoc avec l'objet du document
+                        window.open(`http://localhost:5000${doc.file_path}`, '_blank');
+                        setShowModal(false);
+                      }}
+                      className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                      style={{ all: 'unset', cursor: 'pointer' }}
+                    >
+                      📄
+                    </button>
+
                   </td>
 
                   <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Date inconnue'}</td>

@@ -230,6 +230,43 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 
+// DELETE : supprimer un document de la base de données et du disque
+router.delete('/:id', auth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Vérifier si le document existe et récupérer son chemin
+    const documentResult = await pool.query('SELECT file_path FROM documents WHERE id = $1', [id]);
+
+    if (documentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Document non trouvé' });
+    }
+
+    const filePath = path.join(__dirname, '..', documentResult.rows[0].file_path);
+
+    // Supprimer le fichier du système de fichiers
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+
+    // Supprimer les permissions associées au document
+    await pool.query('DELETE FROM document_permissions WHERE document_id = $1', [id]);
+
+    // Supprimer les associations avec les collections
+    await pool.query('DELETE FROM document_collections WHERE document_id = $1', [id]);
+
+    // Supprimer le document de la table documents
+    await pool.query('DELETE FROM documents WHERE id = $1', [id]);
+
+    res.status(200).json({ message: 'Document supprimé avec succès' });
+  } catch (err) {
+    console.error('Erreur lors de la suppression du document:', err.stack);
+    res.status(500).json({ error: 'Erreur lors de la suppression', details: err.message });
+  }
+});
+
+
+
 
 // POST : créer une collection
 router.post('/collections', auth, async (req, res) => {

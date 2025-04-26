@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from './Navbar';
 import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
-import { useNavigate, useParams } from 'react-router-dom'; 
+import { useNavigate, useParams } from 'react-router-dom';
 
 const DocumentDetails = () => {
   const { id } = useParams(); // ID du document depuis l'URL
 
   console.log("🧾 ID reçu dans l’URL :", id);
-  
+
   const [document, setDocument] = useState(null);
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(null);
@@ -34,9 +34,9 @@ const DocumentDetails = () => {
       }
     };
 
-    
 
-    
+
+
     const fetchVersions = async () => {
       try {
         const res = await fetch(`http://localhost:5000/api/documents/versions/${id}`, {
@@ -91,7 +91,19 @@ const DocumentDetails = () => {
                 <Button variant="secondary" onClick={handleBack}>
                   ⬅️ Revenir aux documents
                 </Button>
+
               </div>
+              <Button
+                variant="outline-primary"
+                size="sm"
+                href={document.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2"
+              >
+                🔍 Voir le document
+              </Button>
+
               <h3 className="mb-4 d-flex align-items-center justify-content-between">
                 <span>📄 Détails du document</span>
                 {document.url && (
