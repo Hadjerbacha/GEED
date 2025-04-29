@@ -110,7 +110,7 @@ const Navbar = () => {
     },    
     {
       title: 'Tableau de bord',
-      path: '/document',
+      path: '/Statistique',
       icon: <FaIcons.FaChartBar />,
     },
     {

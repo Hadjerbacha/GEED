@@ -50,7 +50,7 @@ const Statistique = () => {
           stats && (
             <Row className="g-4">
               {/* Graphique en Barres */}
-              <Col md={6}>
+              <Col md={7}>
                 <Card className="shadow-sm">
                   <Card.Body>
                     <Card.Title>Statistiques par Catégorie</Card.Title>
