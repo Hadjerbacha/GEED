@@ -52,13 +52,16 @@ async function initializeDatabase() {
     // Table pour les documents
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
-        id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        file_path TEXT NOT NULL,
-        category TEXT,
-        text_content TEXT,
-        date TIMESTAMP DEFAULT NOW()
-      );
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  category TEXT,
+  text_content TEXT,
+  owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  visibility VARCHAR(20) DEFAULT 'private',
+  date TIMESTAMP DEFAULT NOW()
+);
+
     `);
 
     // Table pour les collections
@@ -207,8 +210,72 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => {});
+    if (req.file) fs.unlink(req.file.path, () => { });
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
+  }
+});
+
+router.post('/:id/share', auth, async (req, res) => {
+  const { allowedUsers, access, newOwnerId } = req.body; // 🆕 on accepte un "newOwnerId" optionnel
+  const { id } = req.params;
+
+  try {
+    if (!['public', 'custom', 'private'].includes(access)) {
+      return res.status(400).json({ error: 'Type d\'accès invalide' });
+    }
+
+    // 1️⃣ Mettre à jour visibility (+ owner_id si fourni)
+    if (newOwnerId) {
+      await pool.query(
+        `UPDATE documents SET visibility = $1, owner_id = $2 WHERE id = $3`,
+        [access, newOwnerId, id]
+      );
+    } else {
+      await pool.query(
+        `UPDATE documents SET visibility = $1 WHERE id = $2`,
+        [access, id]
+      );
+    }
+
+    // 2️⃣ Reset des permissions
+    await pool.query(`DELETE FROM document_permissions WHERE document_id = $1`, [id]);
+
+    // 3️⃣ Recréer les permissions
+    if (access === 'public') {
+      const allUsers = await pool.query('SELECT id FROM users');
+      const insertPromises = allUsers.rows.map(user =>
+        pool.query(
+          `INSERT INTO document_permissions (user_id, document_id, access_type)
+           VALUES ($1, $2, $3)`,
+          [user.id, id, 'public']
+        )
+      );
+      await Promise.all(insertPromises);
+    } else if (access === 'custom') {
+      if (!Array.isArray(allowedUsers) || allowedUsers.length === 0) {
+        return res.status(400).json({ error: 'Aucun utilisateur spécifié pour un accès personnalisé' });
+      }
+      const insertPromises = allowedUsers.map(userId =>
+        pool.query(
+          `INSERT INTO document_permissions (user_id, document_id, access_type)
+           VALUES ($1, $2, $3)`,
+          [userId, id, 'custom']
+        )
+      );
+      await Promise.all(insertPromises);
+    } else {
+      await pool.query(
+        `INSERT INTO document_permissions (user_id, document_id, access_type)
+         VALUES ($1, $2, $3)`,
+        [req.user.id, id, 'read']
+      );
+    }
+
+    res.status(200).json({ message: 'Partage mis à jour avec succès' });
+
+  } catch (err) {
+    console.error('Erreur lors du partage:', err.stack);
+    res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
 
@@ -276,145 +343,92 @@ router.delete('/:id', auth, async (req, res) => {
 });
 
 
-
-
-// POST : créer une collection
-router.post('/collections', auth, async (req, res) => {
-  const { name } = req.body;
-
-  if (!name) {
-    return res.status(400).json({ error: 'Nom de la collection requis' });
-  }
+router.patch('/:id/visibility', auth, async (req, res) => {
+  const documentId = req.params.id;
+  const { visibility } = req.body;
 
   try {
-    const query = `
-      INSERT INTO collections (name, user_id)
-      VALUES ($1, $2)
-      RETURNING *;
-    `;
-    const values = [name, req.user.id];
-    const result = await pool.query(query, values);
-
-    res.status(201).json(result.rows[0]);
+    await pool.query(
+      'UPDATE documents SET visibility = $1 WHERE id = $2',
+      [visibility, documentId]
+    );
+    res.status(200).json({ message: 'Visibility mise à jour avec succès ! 🚀' });
   } catch (err) {
-    console.error('Erreur lors de la création de la collection:', err.stack);
-    res.status(500).json({ error: 'Erreur lors de la création de la collection', details: err.message });
-  }
-});
-
-// GET : récupérer toutes les collections de l'utilisateur
-router.get('/collections', auth, async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT * FROM collections 
-      WHERE user_id = $1
-      ORDER BY date DESC
-    `, [req.user.id]);
-
-    res.status(200).json(result.rows);
-  } catch (err) {
-    console.error('Erreur lors de la récupération des collections:', err.stack);
+    console.error('Erreur:', err.stack);
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
 
-// POST : ajouter un document à une collection avec option de nom spécifique
-router.post('/collections/:collectionId/add-document', auth, async (req, res) => {
-  const { collectionId } = req.params;
-  const { documentId, collection_name } = req.body;
 
-  if (!documentId) {
-    return res.status(400).json({ error: 'Document ID requis' });
-  }
-
+// 📈 Ajout des statistiques dans le backend
+router.get('/stats', auth, async (req, res) => {
   try {
-    // Vérifier si la collection existe
-    const collectionResult = await pool.query('SELECT * FROM collections WHERE id = $1', [collectionId]);
-    if (collectionResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Collection non trouvée' });
-    }
+    const [
+      userCountResult,
+      documentCountResult,
+      collectionCountResult,
+      taskCountResult,
+      workflowCountResult,
+      documentPerUserResult,
+      taskStatusResult
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM users'),
+      pool.query('SELECT COUNT(*) FROM documents'),
+      pool.query('SELECT COUNT(*) FROM collections'),
+      pool.query('SELECT COUNT(*) FROM tasks'),
+      pool.query('SELECT COUNT(*) FROM workflow'),
+      pool.query(`
+        SELECT u.id, u.name, u.prenom, COUNT(d.id) AS document_count
+        FROM users u
+        LEFT JOIN documents d ON u.id = d.owner_id
+        GROUP BY u.id
+        ORDER BY document_count DESC
+        LIMIT 5
+      `),
+      pool.query(`
+        SELECT status, COUNT(*) AS count
+        FROM tasks
+        GROUP BY status
+      `)
+    ]);
 
-    const query = `
-      INSERT INTO document_collections (document_id, collection_id, collection_name)
-      VALUES ($1, $2, $3)
-      RETURNING *;
-    `;
-    const values = [documentId, collectionId, collection_name || null];
-    const result = await pool.query(query, values);
-
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error('Erreur lors de l\'ajout du document à la collection:', err.stack);
-    res.status(500).json({ error: 'Erreur lors de l\'ajout du document', details: err.message });
+    res.status(200).json({
+      totalUsers: parseInt(userCountResult.rows[0].count, 10),
+      totalDocuments: parseInt(documentCountResult.rows[0].count, 10),
+      totalCollections: parseInt(collectionCountResult.rows[0].count, 10),
+      totalTasks: parseInt(taskCountResult.rows[0].count, 10),
+      totalWorkflows: parseInt(workflowCountResult.rows[0].count, 10),
+      topDocumentOwners: documentPerUserResult.rows,
+      taskStatusDistribution: taskStatusResult.rows
+    });
+  } catch (error) {
+    console.error('Erreur récupération statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques' });
   }
 });
 
-// PATCH : marquer un document comme sauvegardé dans une collection
-router.patch('/collections/:collectionId/save-document/:documentId', auth, async (req, res) => {
-  const { collectionId, documentId } = req.params;
 
+router.get('/stats', async (req, res) => {
   try {
-    const query = `
-      UPDATE document_collections 
-      SET is_saved = TRUE
-      WHERE document_id = $1 AND collection_id = $2
-      RETURNING *;
-    `;
-    const values = [documentId, collectionId];
-    const result = await pool.query(query, values);
+    const usersResult = await pool.query('SELECT COUNT(*) FROM users');
+    const documentsResult = await pool.query('SELECT COUNT(*) FROM documents');
+    const tasksResult = await pool.query('SELECT COUNT(*) FROM tasks');
+    const workflowsResult = await pool.query('SELECT COUNT(*) FROM workflow');
+    const notificationsResult = await pool.query('SELECT COUNT(*) FROM notifications');
 
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Association document-collection non trouvée' });
-    }
-
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    console.error('Erreur lors de la mise à jour:', err.stack);
-    res.status(500).json({ error: 'Erreur serveur', details: err.message });
+    res.json({
+      totalUsers: parseInt(usersResult.rows[0].count, 10),
+      totalDocuments: parseInt(documentsResult.rows[0].count, 10),
+      totalTasks: parseInt(tasksResult.rows[0].count, 10),
+      totalWorkflows: parseInt(workflowsResult.rows[0].count, 10),
+      totalNotifications: parseInt(notificationsResult.rows[0].count, 10),
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
-// GET : récupérer les documents d'une collection avec les nouvelles colonnes
-router.get('/collections/:collectionId/documents', auth, async (req, res) => {
-  const { collectionId } = req.params;
-
-  try {
-    const result = await pool.query(`
-      SELECT d.*, dc.is_saved, dc.collection_name
-      FROM documents d
-      JOIN document_collections dc ON dc.document_id = d.id
-      WHERE dc.collection_id = $1
-      ORDER BY d.date DESC
-    `, [collectionId]);
-
-    res.status(200).json(result.rows);
-  } catch (err) {
-    console.error('Erreur lors de la récupération des documents de la collection:', err.stack);
-    res.status(500).json({ error: 'Erreur serveur', details: err.message });
-  }
-});
-
-// DELETE : retirer un document d'une collection
-router.delete('/collections/:collectionId/remove-document/:documentId', auth, async (req, res) => {
-  const { collectionId, documentId } = req.params;
-
-  try {
-    const result = await pool.query(`
-      DELETE FROM document_collections 
-      WHERE document_id = $1 AND collection_id = $2
-      RETURNING *;
-    `, [documentId, collectionId]);
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Association document-collection non trouvée' });
-    }
-
-    res.status(200).json({ message: 'Document retiré de la collection avec succès' });
-  } catch (err) {
-    console.error('Erreur lors de la suppression:', err.stack);
-    res.status(500).json({ error: 'Erreur serveur', details: err.message });
-  }
-});
 
 // Initialisation des tables
 initializeDatabase();

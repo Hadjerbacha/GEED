@@ -414,7 +414,6 @@ const Doc = () => {
                   {/* Bouton de partage */}
                   <Button variant="light" onClick={() => openShareModal(doc)}>
                     <img src={shareIcon} width="20" alt="Partager" />
-
                   </Button>
                 </td>
 
@@ -476,20 +475,22 @@ const Doc = () => {
             <Button
               variant="primary"
               onClick={async () => {
-                const updatedDoc = {
-                  ...docToShare,
-                  access: shareAccessType,
-                  allowedUsers: shareUsers,
-                };
-
                 try {
-                  await axios.put(`http://localhost:5000/api/documents/${docToShare.id}`, updatedDoc, {
+                  await axios.post(`http://localhost:5000/api/documents/${docToShare.id}/share`, {
+                    access: shareAccessType,
+                    allowedUsers: shareUsers,
+                  }, {
                     headers: { Authorization: `Bearer ${token}` }
                   });
-                  setDocuments(docs => docs.map(doc => doc.id === docToShare.id ? updatedDoc : doc));
+
+                  setDocuments(docs => docs.map(doc =>
+                    doc.id === docToShare.id
+                      ? { ...doc, visibility: shareAccessType }  // ⚡ Update visibility in React state
+                      : doc
+                  ));
                   setShowShareModal(false);
                 } catch (err) {
-                  console.error('Erreur de mise à jour des permissions', err);
+                  console.error('Erreur de partage', err);
                 }
               }}
             >

@@ -20,7 +20,7 @@ import Folder from './components/Folder';
 import DocumentDetails from './components/DocumentDetails';
 import Test from './components/test'; // Importer le composant Test
 import Notif from './components/Notification';
-
+import Statistique from './components/Statistique';
 function App() {
   return (
     <Router>
@@ -44,6 +44,7 @@ function App() {
           <Route path="/details_workflow/:id" element={<ProtectedRoute element={<DetailsWorkflow />} />} />
           <Route path="/register" element={<ProtectedRoute element={<Register />} />} />
           <Route path="/Documents/:id" element={<ProtectedRoute element={<DocumentDetails />} />} />
+          <Route path="/statistique" element={<ProtectedRoute element={<Statistique />} />} />
           <Route path="/notif" element={<ProtectedRoute element={<Notif />} />} />
         </Routes>
       </Container>
