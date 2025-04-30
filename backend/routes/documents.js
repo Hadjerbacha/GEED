@@ -132,8 +132,7 @@ router.get('/', auth, async (req, res) => {
 
 
 
-//upload document
-// Upload document
+// upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
   const { name, access, allowedUsers, category } = req.body;  // <-- On récupère la catégorie depuis le formulaire
 
@@ -152,9 +151,10 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
-      extractedText = data.text;
+      extractedText = data.text;  // Extraction de texte pour les fichiers PDF
     } else if (mimeType?.startsWith('image/')) {
-      const result = await Tesseract.recognize(fullPath, 'eng');
+      // Extraction de texte pour les images avec OCR
+      const result = await Tesseract.recognize(fullPath, 'eng'); // 'eng' pour l'anglais, adapte selon la langue
       extractedText = result.data.text;
     } else {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
@@ -163,16 +163,16 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
     let finalCategory = category;
     if (!finalCategory || finalCategory.trim() === '') {
-      finalCategory = classifyText(extractedText);
+      finalCategory = classifyText(extractedText);  // Classifier le texte pour une catégorie automatique
     }
 
     // Insertion du document dans la base de données
     const insertDocQuery = `
-      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility)
-      VALUES ($1, $2, $3, $4, $5, $6)
+      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *;
     `;
-    const docValues = [name, file_path, finalCategory, extractedText, req.user.id, access];
+    const docValues = [name, file_path, finalCategory, extractedText, req.user.id, access, extractedText];
     const result = await pool.query(insertDocQuery, docValues);
     const documentId = result.rows[0].id;
 
@@ -204,17 +204,20 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     res.status(201).json({
       ...result.rows[0],
-      preview: extractedText.slice(0, 300) + '...',
+      preview: extractedText.slice(0, 300) + '...',  // Prévisualisation du texte extrait
       permissions: access
     });
 
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => { });
+    if (req.file) fs.unlink(req.file.path, () => { });  // Supprimer le fichier en cas d'erreur
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
 
+
+
+//
 router.post('/:id/share', auth, async (req, res) => {
   const { allowedUsers, access, newOwnerId } = req.body; // 🆕 on accepte un "newOwnerId" optionnel
   const { id } = req.params;
