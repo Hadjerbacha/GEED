@@ -46,6 +46,26 @@ function classifyText(text) {
   return 'autre';
 }
 
+// GET : récupérer les utilisateurs ayant accès à un document spécifique
+router.get('/:id/permissions', auth, async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT u.id, u.name, u.prenom, dp.access_type
+      FROM document_permissions dp
+      JOIN users u ON dp.user_id = u.id
+      WHERE dp.document_id = $1
+    `, [id]);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Erreur lors de la récupération des permissions:', err.stack);
+    res.status(500).json({ error: 'Erreur serveur', details: err.message });
+  }
+});
+
+
 // Initialisation des tables de la base de données
 async function initializeDatabase() {
   try {

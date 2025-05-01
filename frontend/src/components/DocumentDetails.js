@@ -14,6 +14,9 @@ const DocumentDetails = () => {
   const [errorMessage, setErrorMessage] = useState(null);
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+  const [summary, setSummary] = useState(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+
 
   useEffect(() => {
 
@@ -33,6 +36,7 @@ const DocumentDetails = () => {
         setErrorMessage("Impossible de charger le document.");
       }
     };
+
 
 
 
@@ -74,9 +78,38 @@ const DocumentDetails = () => {
     }
   };
 
+
+
+
   const handleBack = () => {
     navigate('/documents');
   };
+
+  const handleSummarize = async () => {
+    setIsSummarizing(true);
+    setSummary(null);
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/documents/${id}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error("Erreur lors de la génération du résumé.");
+
+      const data = await res.json();
+      setSummary(data.summary);
+    } catch (error) {
+      console.error("Erreur résumé :", error);
+      setSummary("❌ Impossible de générer le résumé.");
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
 
   return (
     <>
@@ -123,6 +156,18 @@ const DocumentDetails = () => {
               <p><strong>📚 Collection :</strong> {document.collectionName || 'Aucune'}</p>
               <p><strong>📅 Date d’upload :</strong> {new Date(document.createdAt).toLocaleString()}</p>
               <p><strong>🔐 Visibilité :</strong> {document.visibility}</p>
+
+              <div className="mt-3">
+                <Button variant="info" onClick={handleSummarize} disabled={isSummarizing}>
+                  {isSummarizing ? "Résumé en cours..." : "🧠 Résumer ce document"}
+                </Button>
+                {summary && (
+                  <div className="bg-white border rounded p-3 mt-3">
+                    <h5>📝 Résumé généré :</h5>
+                    <p>{summary}</p>
+                  </div>
+                )}
+              </div>
 
               <div className="mt-3">
                 <p><strong>🧠 Contenu extrait :</strong></p>
