@@ -29,7 +29,7 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Email ou mot de passe invalide" });
 
     const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
-      expiresIn: "90d",
+      expiresIn: "300d",
     });
 
     const { password: _, ...userData } = user;

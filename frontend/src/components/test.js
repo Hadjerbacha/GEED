@@ -1,224 +1,316 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+// WorkflowPage.js
+import React, { useEffect, useState } from "react";
 import {
-  Container, Row, Col, Button, Form, Table, Alert, Accordion, Card, Modal
-} from 'react-bootstrap';
-import 'bootstrap/dist/css/bootstrap.min.css';
-import Navbar from './Navbar';
-import { useNavigate } from 'react-router-dom';
+  Button,
+  Form,
+  Modal,
+  Table,
+  Spinner,
+  Alert,
+} from "react-bootstrap";
+import axios from "axios";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import moment from "moment";
+import { FaTrash, FaEdit, FaSearch, FaRobot } from "react-icons/fa";
 
-const Doc = () => {
-  const [documents, setDocuments] = useState([]);
-  const [groupedDocs, setGroupedDocs] = useState({});
-  const [collections, setCollections] = useState([]);
-  const [errorMessage, setErrorMessage] = useState(null);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showFolderModal, setShowFolderModal] = useState(false);
-  const [uploadData, setUploadData] = useState({ collectionName: '', file: null });
-  const [newFolderName, setNewFolderName] = useState('');
-  const token = localStorage.getItem('token');
-  const navigate = useNavigate();
+const WorkflowPage = () => {
+  const [tasks, setTasks] = useState([]);
+  const [filteredTasks, setFilteredTasks] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState("");
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    due_date: "",
+    priority: "moyenne",
+    assigned_to: "",
+    file: null,
+    notify: false,
+  });
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortKey, setSortKey] = useState("due_date");
+  const [sortOrder, setSortOrder] = useState("asc");
 
-  const headers = { Authorization: `Bearer ${token}` };
+  const fetchTasks = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.get("/api/tasks");
+      setTasks(res.data);
+      setFilteredTasks(res.data);
+    } catch (err) {
+      toast.error("Erreur lors du chargement des tâches.");
+    }
+    setLoading(false);
+  };
 
-  // 📥 Charger documents et collections
   useEffect(() => {
-    fetchDocuments();
-    fetchCollections();
+    fetchTasks();
   }, []);
 
-  const fetchDocuments = async () => {
-    try {
-      const res = await axios.get('http://localhost:5000/api/documents/', { headers });
-      if (Array.isArray(res.data)) {
-        setDocuments(res.data);
-      } else {
-        setErrorMessage('Format de données invalide.');
-      }
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Erreur chargement documents.");
-    }
-  };
-
-  const fetchCollections = async () => {
-    try {
-      const res = await axios.get('http://localhost:5000/api/collections/', { headers });
-      setCollections(res.data);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  // 📁 Regrouper les documents par dossier et version
   useEffect(() => {
-    const grouped = {};
-    documents.forEach(doc => {
-      const folder = doc.collectionName || 'Sans dossier';
-      const baseName = doc.name;
-      if (!grouped[folder]) grouped[folder] = {};
-      if (!grouped[folder][baseName]) grouped[folder][baseName] = [];
-      grouped[folder][baseName].push(doc);
+    const filtered = tasks.filter((task) =>
+      task.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    setFilteredTasks(filtered);
+  }, [searchTerm, tasks]);
+
+  const sortTasks = (key) => {
+    const order = sortKey === key && sortOrder === "asc" ? "desc" : "asc";
+    setSortKey(key);
+    setSortOrder(order);
+    const sorted = [...filteredTasks].sort((a, b) => {
+      if (order === "asc") return a[key] > b[key] ? 1 : -1;
+      return a[key] < b[key] ? 1 : -1;
     });
+    setFilteredTasks(sorted);
+  };
 
-    for (const folder in grouped) {
-      for (const baseName in grouped[folder]) {
-        grouped[folder][baseName].sort((a, b) => b.version - a.version);
-      }
+  const handleInputChange = (e) => {
+    const { name, value, type, checked, files } = e.target;
+    const val = type === "checkbox" ? checked : type === "file" ? files[0] : value;
+    setFormData((prev) => ({ ...prev, [name]: val }));
+  };
+
+  const validateForm = () => {
+    if (!formData.title || !formData.due_date || !formData.priority || !formData.assigned_to) {
+      toast.warning("Veuillez remplir tous les champs obligatoires.");
+      return false;
     }
+    if (moment(formData.due_date).isBefore(moment())) {
+      toast.warning("La date d'échéance doit être future.");
+      return false;
+    }
+    return true;
+  };
 
-    setGroupedDocs(grouped);
-  }, [documents]);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!validateForm()) return;
 
-  // 📤 Uploader un document
-  const handleUpload = async () => {
-    if (!uploadData.collectionName || !uploadData.file) return;
-
-    const formData = new FormData();
-    formData.append('file', uploadData.file);
-    formData.append('collectionName', uploadData.collectionName);
+    const payload = new FormData();
+    Object.entries(formData).forEach(([key, val]) =>
+      payload.append(key, val)
+    );
 
     try {
-      await axios.post('http://localhost:5000/api/documents/', formData, { headers });
-      setShowUploadModal(false);
-      setUploadData({ collectionName: '', file: null });
-      fetchDocuments();
+      await axios.post("/api/tasks", payload);
+      toast.success("Tâche ajoutée avec succès !");
+      setShowModal(false);
+      setFormData({
+        title: "",
+        description: "",
+        due_date: "",
+        priority: "moyenne",
+        assigned_to: "",
+        file: null,
+        notify: false,
+      });
+      setAiSuggestion("");
+      fetchTasks();
     } catch (err) {
-      console.error(err);
-      setErrorMessage("Erreur lors de l’upload.");
+      toast.error("Erreur lors de l'ajout de la tâche.");
     }
   };
 
-  // 📁 Créer un nouveau dossier
-  const handleCreateFolder = async () => {
-    if (!newFolderName) return;
-    try {
-      await axios.post('http://localhost:5000/api/collections/', { name: newFolderName }, { headers });
-      setNewFolderName('');
-      setShowFolderModal(false);
-      fetchCollections();
-    } catch (err) {
-      console.error(err);
-      setErrorMessage("Erreur création dossier.");
+  const getPriorityColor = (priority) => {
+    switch (priority) {
+      case "haute":
+        return "danger";
+      case "moyenne":
+        return "warning";
+      case "basse":
+        return "success";
+      default:
+        return "secondary";
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Supprimer ce document ?')) return;
+  const generateAISuggestion = async () => {
+    if (!formData.description) {
+      toast.warning("Veuillez d'abord saisir une description.");
+      return;
+    }
     try {
-      await axios.delete(`http://localhost:5000/api/documents/${id}`, { headers });
-      fetchDocuments();
+      const res = await axios.post("/api/ai/suggest-title", {
+        description: formData.description,
+      });
+      setAiSuggestion(res.data.suggestion);
+      setFormData((prev) => ({ ...prev, title: res.data.suggestion }));
+      toast.info("Suggestion IA appliquée au titre.");
     } catch (err) {
-      console.error(err);
+      toast.error("Erreur lors de la suggestion IA.");
     }
   };
 
   return (
-    <>
-      <Navbar />
-      <Container fluid className="my-4">
-        <Row className="mb-3">
-          <Col className="text-end">
-            <Button variant="success" onClick={() => setShowFolderModal(true)}>➕ Nouveau dossier</Button>{' '}
-            <Button variant="primary" onClick={() => setShowUploadModal(true)}>⬆️ Ajouter document</Button>
-          </Col>
-        </Row>
+    <div className="container-fluid mt-4">
+      <ToastContainer />
+      <h2 className="mb-4 text-center">Gestion des Workflows</h2>
 
-        {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <Button variant="primary" onClick={() => setShowModal(true)}>
+          Nouvelle Tâche
+        </Button>
+        <Form.Control
+          type="text"
+          placeholder="Rechercher une tâche..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          style={{ width: "250px" }}
+        />
+      </div>
 
-        <Accordion defaultActiveKey="0">
-          {Object.entries(groupedDocs).map(([collectionName, docsByName], idx) => (
-            <Card key={collectionName}>
-              <Accordion.Item eventKey={idx.toString()}>
-                <Accordion.Header>📁 {collectionName}</Accordion.Header>
-                <Accordion.Body>
-                  {Object.entries(docsByName).map(([docName, versions]) => (
-                    <div key={docName} className="mb-4">
-                      <h5>{docName}</h5>
-                      <Table striped bordered hover responsive>
-                        <thead>
-                          <tr>
-                            <th>Version</th>
-                            <th>Date</th>
-                            <th>Catégorie</th>
-                            <th>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {versions.map(doc => (
-                            <tr key={doc.id}>
-                              <td>{doc.version}</td>
-                              <td>{doc.date ? new Date(doc.date).toLocaleString() : 'N/A'}</td>
-                              <td>{doc.category || 'N/A'}</td>
-                              <td>
-                                <Button size="sm" variant="primary" onClick={() => window.open(`http://localhost:5000${doc.file_path}`, '_blank')}>Ouvrir</Button>{' '}
-                                <Button size="sm" variant="info" onClick={() => navigate(`/documents/${doc.id}`)}>Détails</Button>{' '}
-                                <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>Supprimer</Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </Table>
-                    </div>
-                  ))}
-                </Accordion.Body>
-              </Accordion.Item>
-            </Card>
-          ))}
-        </Accordion>
-      </Container>
+      {loading ? (
+        <div className="text-center">
+          <Spinner animation="border" />
+        </div>
+      ) : (
+        <Table striped bordered hover responsive>
+          <thead>
+            <tr>
+              <th onClick={() => sortTasks("title")}>Titre</th>
+              <th onClick={() => sortTasks("due_date")}>Échéance</th>
+              <th onClick={() => sortTasks("priority")}>Priorité</th>
+              <th>Assigné à</th>
+              <th>Fichier</th>
+              <th>État</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredTasks.map((task) => (
+              <tr key={task.id}>
+                <td>{task.title}</td>
+                <td>{moment(task.due_date).format("DD/MM/YYYY")}</td>
+                <td>
+                  <Alert
+                    variant={getPriorityColor(task.priority)}
+                    className="py-1 text-center mb-0"
+                  >
+                    {task.priority}
+                  </Alert>
+                </td>
+                <td>{task.assigned_to_name || "—"}</td>
+                <td>
+                  {task.file ? (
+                    <a href={task.file} target="_blank" rel="noreferrer">
+                      Voir
+                    </a>
+                  ) : (
+                    "Aucun"
+                  )}
+                </td>
+                <td>{task.status || "En attente"}</td>
+                <td>
+                  <Button size="sm" variant="outline-warning" className="me-2">
+                    <FaEdit />
+                  </Button>
+                  <Button size="sm" variant="outline-danger">
+                    <FaTrash />
+                  </Button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
 
-      {/* Modal Upload */}
-      <Modal show={showUploadModal} onHide={() => setShowUploadModal(false)}  style={{ zIndex: 1050, width: '100%' }}
-  backdrop="static"
-  centered>
-        <Modal.Header closeButton>
-          <Modal.Title>📄 Ajouter un document</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form.Group className="mb-3">
-            <Form.Label>Dossier</Form.Label>
-            <Form.Select value={uploadData.collectionName} onChange={e => setUploadData({ ...uploadData, collectionName: e.target.value })}>
-              <option value="">-- Choisir un dossier --</option>
-              {collections.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-            </Form.Select>
-          </Form.Group>
-          <Form.Group>
-            <Form.Label>Fichier</Form.Label>
-            <Form.Control type="file" onChange={e => setUploadData({ ...uploadData, file: e.target.files[0] })} />
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowUploadModal(false)}>Annuler</Button>
-          <Button variant="primary" onClick={handleUpload}>Uploader</Button>
-        </Modal.Footer>
+      <Modal show={showModal} onHide={() => setShowModal(false)} style={{ zIndex: 1050, width: '100%' }}>
+        <Form onSubmit={handleSubmit}>
+          <Modal.Header closeButton>
+            <Modal.Title>Ajouter une Tâche</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <Form.Group className="mb-2">
+              <Form.Label>Titre *</Form.Label>
+              <Form.Control
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleInputChange}
+                required
+              />
+              {aiSuggestion && <small className="text-success">Suggestion IA: {aiSuggestion}</small>}
+              <Button
+                size="sm"
+                variant="outline-secondary"
+                onClick={generateAISuggestion}
+                className="mt-1"
+              >
+                <FaRobot /> Suggérer un titre IA
+              </Button>
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Description</Form.Label>
+              <Form.Control
+                as="textarea"
+                name="description"
+                value={formData.description}
+                onChange={handleInputChange}
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Date d'échéance *</Form.Label>
+              <Form.Control
+                type="date"
+                name="due_date"
+                value={formData.due_date}
+                onChange={handleInputChange}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Priorité *</Form.Label>
+              <Form.Select
+                name="priority"
+                value={formData.priority}
+                onChange={handleInputChange}
+                required
+              >
+                <option value="haute">Haute</option>
+                <option value="moyenne">Moyenne</option>
+                <option value="basse">Basse</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Assigné à (ID utilisateur) *</Form.Label>
+              <Form.Control
+                type="text"
+                name="assigned_to"
+                value={formData.assigned_to}
+                onChange={handleInputChange}
+                required
+              />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Label>Fichier</Form.Label>
+              <Form.Control type="file" name="file" onChange={handleInputChange} />
+            </Form.Group>
+            <Form.Group className="mb-2">
+              <Form.Check
+                type="checkbox"
+                name="notify"
+                checked={formData.notify}
+                onChange={handleInputChange}
+                label="Envoyer une notification"
+              />
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>
+              Annuler
+            </Button>
+            <Button type="submit" variant="primary">
+              Enregistrer
+            </Button>
+          </Modal.Footer>
+        </Form>
       </Modal>
-
-      {/* Modal Nouveau dossier */}
-      <Modal show={showFolderModal} onHide={() => setShowFolderModal(false)}  style={{ zIndex: 1050, width: '100%' }}
-  backdrop="static"
-  centered>
-        <Modal.Header closeButton>
-          <Modal.Title>Créer un dossier</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <Form.Group>
-            <Form.Label>Nom du dossier</Form.Label>
-            <Form.Control
-              type="text"
-              value={newFolderName}
-              onChange={(e) => setNewFolderName(e.target.value)}
-              placeholder="Ex: RH, Finances, Juridique"
-            />
-          </Form.Group>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowFolderModal(false)}>Annuler</Button>
-          <Button variant="success" onClick={handleCreateFolder}>Créer</Button>
-        </Modal.Footer>
-      </Modal>
-    </>
+    </div>
   );
 };
 
-export default Doc;
+export default WorkflowPage;
+
