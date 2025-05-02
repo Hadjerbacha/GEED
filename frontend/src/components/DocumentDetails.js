@@ -1,19 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import Navbar from './Navbar';
 import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
-import { useNavigate, useParams } from 'react-router-dom'; 
+import { useNavigate, useParams } from 'react-router-dom';
 
 const DocumentDetails = () => {
   const { id } = useParams(); // ID du document depuis l'URL
 
   console.log("🧾 ID reçu dans l’URL :", id);
-  
+
   const [document, setDocument] = useState(null);
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
   const token = localStorage.getItem('token');
   const navigate = useNavigate();
+  const [summary, setSummary] = useState(null);
+  const [isSummarizing, setIsSummarizing] = useState(false);
+
 
   useEffect(() => {
 
@@ -34,9 +37,10 @@ const DocumentDetails = () => {
       }
     };
 
-    
 
-    
+
+
+
     const fetchVersions = async () => {
       try {
         const res = await fetch(`http://localhost:5000/api/documents/versions/${id}`, {
@@ -74,9 +78,38 @@ const DocumentDetails = () => {
     }
   };
 
+
+
+
   const handleBack = () => {
     navigate('/documents');
   };
+
+  const handleSummarize = async () => {
+    setIsSummarizing(true);
+    setSummary(null);
+
+    try {
+      const res = await fetch(`http://localhost:5000/api/documents/${id}/summarize`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) throw new Error("Erreur lors de la génération du résumé.");
+
+      const data = await res.json();
+      setSummary(data.summary);
+    } catch (error) {
+      console.error("Erreur résumé :", error);
+      setSummary("❌ Impossible de générer le résumé.");
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
+
 
   return (
     <>
@@ -91,7 +124,19 @@ const DocumentDetails = () => {
                 <Button variant="secondary" onClick={handleBack}>
                   ⬅️ Revenir aux documents
                 </Button>
+
               </div>
+              <Button
+                variant="outline-primary"
+                size="sm"
+                href={document.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2"
+              >
+                🔍 Voir le document
+              </Button>
+
               <h3 className="mb-4 d-flex align-items-center justify-content-between">
                 <span>📄 Détails du document</span>
                 {document.url && (
@@ -111,6 +156,18 @@ const DocumentDetails = () => {
               <p><strong>📚 Collection :</strong> {document.collectionName || 'Aucune'}</p>
               <p><strong>📅 Date d’upload :</strong> {new Date(document.createdAt).toLocaleString()}</p>
               <p><strong>🔐 Visibilité :</strong> {document.visibility}</p>
+
+              <div className="mt-3">
+                <Button variant="info" onClick={handleSummarize} disabled={isSummarizing}>
+                  {isSummarizing ? "Résumé en cours..." : "🧠 Résumer ce document"}
+                </Button>
+                {summary && (
+                  <div className="bg-white border rounded p-3 mt-3">
+                    <h5>📝 Résumé généré :</h5>
+                    <p>{summary}</p>
+                  </div>
+                )}
+              </div>
 
               <div className="mt-3">
                 <p><strong>🧠 Contenu extrait :</strong></p>

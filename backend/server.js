@@ -14,6 +14,7 @@ const workflowsRoutes = require("./routes/task");
 const notifRoutes = require("./routes/notif");
 const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
+const statsRoutes = require('./routes/stats');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +28,7 @@ const corsOptions = {
 app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 app.use(express.urlencoded({ extended: true }));
+app.use('/api', statsRoutes);
 
 
 // Routes

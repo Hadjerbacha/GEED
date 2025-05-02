@@ -379,7 +379,20 @@ const Doc = () => {
           <tbody>
             {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
               <tr key={doc.id}>
-                <td>{doc.name} {doc.version && `(version ${doc.version})`}</td>
+                <td>{doc.name} {doc.version && `(version ${doc.version})`}
+                  <button
+                    onClick={() => {
+                      setSelectedDoc(doc);  // Mettez à jour selectedDoc avec l'objet du document
+                      window.open(`http://localhost:5000${doc.file_path}`, '_blank');
+                      setShowModal(false);
+                    }}
+                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                    style={{ all: 'unset', cursor: 'pointer' }}
+                  >
+                    📄
+                  </button>
+
+                </td>
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
@@ -400,8 +413,7 @@ const Doc = () => {
 
                   {/* Bouton de partage */}
                   <Button variant="light" onClick={() => openShareModal(doc)}>
-                  <img src={shareIcon} width="20" alt="Partager" />
-
+                    <img src={shareIcon} width="20" alt="Partager" />
                   </Button>
                   <Button
   variant="dark"
@@ -472,20 +484,22 @@ const Doc = () => {
             <Button
               variant="primary"
               onClick={async () => {
-                const updatedDoc = {
-                  ...docToShare,
-                  access: shareAccessType,
-                  allowedUsers: shareUsers,
-                };
-
                 try {
-                  await axios.put(`http://localhost:5000/api/documents/${docToShare.id}`, updatedDoc, {
+                  await axios.post(`http://localhost:5000/api/documents/${docToShare.id}/share`, {
+                    access: shareAccessType,
+                    allowedUsers: shareUsers,
+                  }, {
                     headers: { Authorization: `Bearer ${token}` }
                   });
-                  setDocuments(docs => docs.map(doc => doc.id === docToShare.id ? updatedDoc : doc));
+
+                  setDocuments(docs => docs.map(doc =>
+                    doc.id === docToShare.id
+                      ? { ...doc, visibility: shareAccessType }  // ⚡ Update visibility in React state
+                      : doc
+                  ));
                   setShowShareModal(false);
                 } catch (err) {
-                  console.error('Erreur de mise à jour des permissions', err);
+                  console.error('Erreur de partage', err);
                 }
               }}
             >
