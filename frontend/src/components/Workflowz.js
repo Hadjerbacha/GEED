@@ -195,7 +195,7 @@ const generateTasks = async () => {
       <Chatbot/>
       <div className="p-4">
         <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:0.5}}>
-          <h2>Workflow: {workflow.name}</h2>
+        <h2>Workflow: {workflow?.name || 'Chargement...'}</h2>
           <Button variant="primary" onClick={generateTasks}>Générer des tâches automatiques</Button>
         
           <p><strong>Statut:</strong> <Badge bg={workflow.status==='completed'?'success':'primary'}>{workflow.status}</Badge></p>
