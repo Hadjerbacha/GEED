@@ -146,3 +146,11 @@
     display: block;
     top: 35%; 
   }
+  .logo-hover {
+    transition: transform 0.3s ease;
+  }
+  
+  .logo-hover:hover {
+    transform: scale(1.1);
+  }
+  

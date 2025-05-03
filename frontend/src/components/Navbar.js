@@ -7,6 +7,9 @@ import { IconContext } from 'react-icons';
 import { jwtDecode } from 'jwt-decode';
 import Dropdown from 'react-bootstrap/Dropdown';
 import axios from 'axios';
+import OverlayTrigger from 'react-bootstrap/OverlayTrigger';
+import Tooltip from 'react-bootstrap/Tooltip';
+
 
 const Navbar = () => {
   const [sidebar, setSidebar] = useState(false);
@@ -31,7 +34,7 @@ const Navbar = () => {
       setUserId(decoded.id); // ici tu fixes le problème
     }
   }, []);
-  
+
   // Récupérer la liste des utilisateurs
   useEffect(() => {
     fetch('http://localhost:5000/api/auth/users')
@@ -94,20 +97,20 @@ const Navbar = () => {
         <div className="notification-icon" style={{ display: 'inline-flex', alignItems: 'center' }}>
           <FaIcons.FaBell />
           {unreadNotificationsCount > 0 && (
-            <span className="badge" style={{ 
-              backgroundColor: 'red', 
-              color: 'white', 
-              borderRadius: '50%', 
-              padding: '2px 6px', 
-              fontSize: '12px', 
-              marginLeft: '5px' 
+            <span className="badge" style={{
+              backgroundColor: 'red',
+              color: 'white',
+              borderRadius: '50%',
+              padding: '2px 6px',
+              fontSize: '12px',
+              marginLeft: '5px'
             }}>
               {unreadNotificationsCount}
             </span>
           )}
         </div>
       )
-    },    
+    },
     {
       title: 'Tableau de bord',
       path: '/Statistique',
@@ -128,7 +131,53 @@ const Navbar = () => {
             <FaIcons.FaBars onClick={showSidebar} />
           </Link>
 
-          <img src="/11.png" alt="Logo" width="100" height="50" style={{ marginLeft: 'auto', marginRight: 'auto' }} />
+
+
+          <Link to="/accueil" style={{ marginLeft: 'auto', marginRight: 'auto' }}>
+  <img
+    src="/11.png"
+    alt="Logo"
+    width="100"
+    height="50"
+    className="logo-hover"
+    style={{ cursor: 'pointer' }}
+  />
+</Link>
+
+<OverlayTrigger
+  placement="bottom"
+  overlay={<Tooltip id="tooltip-bottom">Voir notifications</Tooltip>}
+>
+  <Link
+    to="/notif"
+    style={{
+      position: 'relative',
+      marginRight: '5px',
+      marginLeft: '-10px',
+      display: 'inline-block',
+    }}
+  >
+    <FaIcons.FaBell size={20} color="#174193" />
+    {unreadNotificationsCount > 0 && (
+      <span
+        style={{
+          position: 'absolute',
+          top: '-5px',
+          right: '-10px',
+          backgroundColor: 'red',
+          color: 'white',
+          borderRadius: '50%',
+          padding: '2px 6px',
+          fontSize: '12px',
+          zIndex: 10,
+        }}
+      >
+        {unreadNotificationsCount}
+      </span>
+    )}
+  </Link>
+</OverlayTrigger>
+
           {currentUser ? (
             <Dropdown>
               <Dropdown.Toggle variant="light" id="dropdown-basic" className="text-success fw-bold">
@@ -148,6 +197,7 @@ const Navbar = () => {
           )}
         </div>
       </div>
+
 
       <nav className={sidebar ? 'nav-menu active' : 'nav-menu'} style={{ zIndex: 200 }}>
         <ul className="nav-menu-items" onClick={showSidebar}>
