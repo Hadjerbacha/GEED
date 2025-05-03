@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
-
+const authMiddleware = require('../middleware/authMiddleware');
+const { logWorkflowAction } = require('../utils/log');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 // ➕ Ajouter un workflow
 router.post('/', async (req, res) => {
   const { name, description, echeance, status, priorite, created_by } = req.body;
@@ -172,6 +174,131 @@ router.get('/:id/bpmn', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur lors de la génération BPMN.' });
+  }
+});
+
+// routes/workflow.js (extrait)
+router.get('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // 1) Récupère le workflow
+    const wfRes = await pool.query(
+      'SELECT * FROM workflow WHERE id = $1',
+      [id]
+    );
+    if (!wfRes.rowCount) {
+      return res.status(404).json({ error: 'Workflow non trouvé' });
+    }
+    const workflow = wfRes.rows[0];
+
+    // 2) Récupère les étapes associées
+    const stepsRes = await pool.query(
+      'SELECT * FROM tasks WHERE workflow_id = $1 ORDER BY due_date ASC, id ASC',
+      [id]
+    );
+    // mappe les champs pour qu’ils correspondent à { id, name, status, … }
+    const steps = stepsRes.rows.map(row => ({
+      id:        row.id,
+      name:      row.title,
+      status:    row.status,
+      // ajoute ici tout autre champ que tu veux afficher
+    }));
+
+    // 3) Renvoie l’objet attendu par le front
+    return res.json({ workflow, steps });
+  } catch (err) {
+    console.error('GET /api/workflows/:id error:', err);
+    return res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+// routes/workflow.js
+router.post('/:id/steps/:stepId/complete', authMiddleware, async (req, res) => {
+  const { id, stepId } = req.params;
+  const userId = req.user.id; // Assurez-vous que l'utilisateur est authentifié
+
+  try {
+    // Marquer l'étape comme complétée
+    await pool.query(
+      'UPDATE workflow_steps SET status = $1, completed_at = NOW() WHERE id = $2 AND workflow_id = $3',
+      ['completed', stepId, id]
+    );
+
+    // Enregistrer le log
+    const message = `Étape ${stepId} complétée par l'utilisateur ${userId}`;
+    await logWorkflowAction(id, message);
+
+    res.status(200).json({ message: 'Étape complétée avec succès.' });
+  } catch (err) {
+    console.error('Erreur lors de la complétion de l\'étape :', err);
+    res.status(500).json({ error: 'Impossible de compléter l\'étape.' });
+  }
+});
+
+// Après les autres imports
+// On suppose que tu as une table `workflow_logs(workflow_id, message, timestamp)`
+router.get('/:id/logs', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const logsRes = await pool.query(
+      'SELECT message, timestamp FROM workflow_logs WHERE workflow_id = $1 ORDER BY timestamp DESC',
+      [id]
+    );
+    return res.json(logsRes.rows);
+  } catch (err) {
+    console.error('GET /api/workflows/:id/logs error:', err);
+    return res.status(500).json({ error: 'Impossible de récupérer les logs.' });
+  }
+});
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+// Exemple : POST /api/workflows/:id/generate-tasks
+router.post("/:id/generate-tasks", async (req, res) => {
+  const workflowId = req.params.id;
+
+  try {
+    const { prompt } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: "Prompt requis pour générer les tâches." });
+    }
+
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    // Nettoyage du texte Gemini (enlève ```json et ```)
+    const cleanedText = text.replace(/```json|```/g, "").trim();
+
+    // Parsing JSON
+    let tasks = [];
+    try {
+      tasks = JSON.parse(cleanedText);
+    } catch (err) {
+      console.error("Erreur de parsing JSON:", err);
+      return res.status(500).json({ error: "Réponse mal formatée par Gemini." });
+    }
+
+    // Insertion dans la base PostgreSQL
+    const insertedTasks = [];
+
+    for (const task of tasks) {
+      const { title, description, due_date } = task;
+
+      const result = await pool.query(
+        `INSERT INTO tasks (title, description, due_date, workflow_id)
+         VALUES ($1, $2, $3, $4) RETURNING *`,
+        [title, description || "", due_date || null, workflowId]
+      );
+
+      insertedTasks.push(result.rows[0]);
+    }
+
+    res.status(201).json({ message: "Tâches générées et enregistrées avec succès.", tasks: insertedTasks });
+  } catch (error) {
+    console.error("Erreur lors de la génération ou insertion :", error);
+    res.status(500).json({ error: "Erreur serveur lors de la génération de tâches." });
   }
 });
 

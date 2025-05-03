@@ -1,21 +1,26 @@
-const express = require('express');
-const axios = require('axios');
+// routes/gemini.js
+const express = require("express");
 const router = express.Router();
+const dotenv = require("dotenv");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// Appelle le serveur local Python
-router.post('/suggest_description', async (req, res) => {
-  const { title } = req.body;
+dotenv.config();
 
-  if (!title || title.trim() === "") {
-    return res.status(400).json({ error: "Le titre est requis." });
-  }
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 
+router.post("/gemini", async (req, res) => {
   try {
-    const response = await axios.post('http://localhost:8000/suggest_description', { title });
-    res.json({ description: response.data.description });
-  } catch (err) {
-    console.error("Erreur serveur IA local :", err.message);
-    res.status(500).json({ error: "Erreur de génération IA locale." });
+    const { prompt } = req.body;
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    res.json({ output: text });
+  } catch (error) {
+    console.error("Erreur Gemini API:", error);
+    res.status(500).json({ error: "Erreur lors de la génération." });
   }
 });
 

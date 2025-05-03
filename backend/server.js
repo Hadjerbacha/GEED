@@ -41,7 +41,7 @@ app.use('/api/list-tasks', listTasksRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/workflow', workRoutes);
-app.use('/api/ai', aiRoutes);
+app.use('/api/', aiRoutes);
 // Lancement du serveur
 app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 
