@@ -415,6 +415,15 @@ const Doc = () => {
                   <Button variant="light" onClick={() => openShareModal(doc)}>
                     <img src={shareIcon} width="20" alt="Partager" />
                   </Button>
+                  <Button
+  variant="dark"
+  size="sm"
+  className="ms-2"
+  title="Démarrer le workflow"
+  onClick={() => navigate('/test', { state: { document: doc } })}
+><i className="bi bi-play-fill me-1"></i></Button>
+
+
                 </td>
 
               </tr>

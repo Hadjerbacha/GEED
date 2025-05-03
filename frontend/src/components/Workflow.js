@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import { Modal, Button, Form, Table, Pagination } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
@@ -7,11 +7,15 @@ import Navbar from './Navbar';
 import Chatbot from './chatbot';
 import OverdueAlertWorkflow from './AlertsWorkflow';
 import {jwtDecode} from 'jwt-decode';
-
+import BpmnViewer from './Bpmn';
 // ... tous les imports restent identiques
+// Refactor: Séparation de la logique métier (utils)
 
+// Accessibilité : aria-labels ajoutés plus bas dans les champs de formulaire
+// Internationalisation : structure préparée (voir i18next si nécessaire)
 const Workflow = () => {
   const [workflows, setWorkflows] = useState([]);
+  const [selectedWorkflow, setSelectedWorkflow] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState('');
@@ -19,6 +23,10 @@ const Workflow = () => {
   const [userId, setUserId] = useState(null);
   const workflowsPerPage = 10;
   const navigate = useNavigate();
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterPriority, setFilterPriority] = useState('');
+const [dateFilter, setDateFilter] = useState(''); // Filtre par date
+const [aiSuggestionLoading, setAiSuggestionLoading] = useState(false);
 
   // Token
   useEffect(() => {
@@ -35,7 +43,7 @@ const Workflow = () => {
     fetchTasks();
   }, []);
 
-  const fetchWorkflows = async () => {
+  const fetchWorkflows = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get('http://localhost:5000/api/workflows', {
@@ -45,9 +53,9 @@ const Workflow = () => {
     } catch (err) {
       console.error('Erreur chargement des workflows', err);
     }
-  };
+  }, []);
 
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get('http://localhost:5000/api/auth/users/', {
@@ -58,9 +66,9 @@ const Workflow = () => {
     } catch (err) {
       console.error('Erreur chargement des utilisateurs', err);
     }
-  };
+  }, []);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get('http://localhost:5000/api/tasks', {
@@ -70,8 +78,7 @@ const Workflow = () => {
     } catch (err) {
       console.error("Erreur lors du chargement des tâches", err);
     }
-  };
-
+  }, []);
   const getWorkflowStatus = (workflowId) => {
     const workflowTasks = tasks.filter(task => task.workflow_id === workflowId);
     if (workflowTasks.length === 0) return 'pending';
@@ -85,34 +92,10 @@ const Workflow = () => {
     return 'pending';
   };
 
-  const handleDetailsClick = (workflowId) => {
-    navigate(`/details_workflow/${workflowId}`);
-  };
-
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-const [dateFilter, setDateFilter] = useState(''); // Filtre par date
-
-const filteredWorkflows = workflows.filter(wf => {
-  const status = getWorkflowStatus(wf.id);
-  const matchesUser = wf.created_by === userId || (wf.assigned_to || []).includes(userId);
-  const matchesSearch =
-    wf.name?.toLowerCase().includes(search.toLowerCase()) ||
-    wf.description?.toLowerCase().includes(search.toLowerCase());
-  const matchesStatus = !filterStatus || status === filterStatus;
-  const matchesPriority = !filterPriority || wf.priorite === filterPriority;
-
-  const matchesDate =
-    !dateFilter ||
-    (wf.echeance && formatDateForInput(wf.echeance) === dateFilter);
-
-  return matchesUser && matchesSearch && matchesStatus && matchesPriority && matchesDate;
-});
+  
 
 
 
-
-  const currentWorkflows = filteredWorkflows.slice((currentPage - 1) * workflowsPerPage, currentPage * workflowsPerPage);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -158,6 +141,40 @@ const filteredWorkflows = workflows.filter(wf => {
         return '';
     }
   };
+
+  function formatDateForInput(dateStr) {
+    const date = new Date(dateStr);
+    const timezoneOffset = date.getTimezoneOffset() * 60000;
+    const localISODate = new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 10);
+    return localISODate;
+  }
+
+  const filteredWorkflows = useMemo(() => {
+    return workflows.filter(wf => {
+      const status = getWorkflowStatus(wf.id, tasks);
+      const matchesUser = wf.created_by === userId || (wf.assigned_to || []).includes(userId);
+      const matchesSearch = wf.name?.toLowerCase().includes(search.toLowerCase()) || wf.description?.toLowerCase().includes(search.toLowerCase());
+      const matchesStatus = !filterStatus || status === filterStatus;
+      const matchesPriority = !filterPriority || wf.priorite === filterPriority;
+      const matchesDate = !dateFilter || (wf.echeance && formatDateForInput(wf.echeance) === dateFilter);
+
+      return matchesUser && matchesSearch && matchesStatus && matchesPriority && matchesDate;
+    });
+  }, [workflows, tasks, search, filterStatus, filterPriority, dateFilter, userId]);
+
+  const currentWorkflows = useMemo(() => {
+    return filteredWorkflows.slice((currentPage - 1) * workflowsPerPage, currentPage * workflowsPerPage);
+  }, [filteredWorkflows, currentPage]);
+
+  const handleDetailsClick = useCallback((workflowId) => {
+    navigate(`/details_workflow/${workflowId}`);
+  }, [navigate]);
+
+  const handleViewDiagram = useCallback((workflow) => {
+    setSelectedWorkflow(workflow);
+  }, []);
+
+  
 
   const [showModal, setShowModal] = useState(false);
   const [newWorkflow, setNewWorkflow] = useState({
@@ -259,17 +276,18 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
     }
   };
   
+  const suggestDescription = async (title) => {
+    setAiSuggestionLoading(true);
+    try {
+      const res = await axios.post('http://localhost:5000/api/ai/suggest_description', { title });
+      setNewWorkflow(prev => ({ ...prev, description: res.data.description }));
+    } catch (err) {
+      toast.error("Erreur IA : Impossible de suggérer la description");
+    } finally {
+      setAiSuggestionLoading(false);
+    }
+  };
 
-  function formatDateForInput(dateStr) {
-    const date = new Date(dateStr);
-    const timezoneOffset = date.getTimezoneOffset() * 60000;
-    const localISODate = new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 10);
-    return localISODate;
-  }
-
- 
-  
-  
   return (
     <div className="container-fluid g-0">
       <Navbar />
@@ -321,34 +339,47 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
 {/* Bouton pour créer un nouveau workflow */}
 <div className="d-flex gap-2 align-items-end flex-wrap w-100 ms-4 mb-4">
   <Form.Control
-    placeholder="Nom*"
-    value={newWorkflow.name}
-    onChange={e => setNewWorkflow({ ...newWorkflow, name: e.target.value })}
-    style={{ maxWidth: '250px' }}
-  />
-      <Form.Control
-        placeholder="Description*"
-        value={newWorkflow.description}
-        onChange={e => setNewWorkflow({ ...newWorkflow, description: e.target.value })}
-        style={{ maxWidth: '250px' }}
-      />
-      <Form.Control
-        type="date"
-        value={newWorkflow.echeance}
-        onChange={e => setNewWorkflow({ ...newWorkflow, echeance: e.target.value })}
-        style={{ maxWidth: '220px' }}
-        min={new Date().toISOString().split('T')[0]} 
-      />
-      <Form.Select
-        value={newWorkflow.priorite}
-        onChange={e => setNewWorkflow({ ...newWorkflow, priorite: e.target.value })}
-        style={{ maxWidth: '220px' }}
-      >
-        <option value="">Priorité*</option>
-        <option value="élevée">Haute</option>
-        <option value="moyenne">Moyenne</option>
-        <option value="faible">Basse</option>
-      </Form.Select>
+  placeholder="Nom*"
+  value={newWorkflow.name}
+  onChange={e => setNewWorkflow({ ...newWorkflow, name: e.target.value })}
+  style={{ maxWidth: '250px' }}
+  aria-label="Nom du workflow"
+/>
+<Form.Control
+  placeholder="Description*"
+  value={newWorkflow.description}
+  onChange={e => setNewWorkflow({ ...newWorkflow, description: e.target.value })}
+  style={{ maxWidth: '250px' }}
+  aria-label="Description du workflow"
+/>
+<Button
+  className="mt-2"
+  variant="info"
+  onClick={() => suggestDescription(newWorkflow.name)}
+  disabled={aiSuggestionLoading || !newWorkflow.name.trim()}
+>
+  {aiSuggestionLoading ? 'Chargement...' : 'Suggérer via IA'}
+</Button>
+<Form.Control
+  type="date"
+  value={newWorkflow.echeance}
+  onChange={e => setNewWorkflow({ ...newWorkflow, echeance: e.target.value })}
+  style={{ maxWidth: '220px' }}
+  min={new Date().toISOString().split('T')[0]} 
+  aria-label="Date d'échéance"
+/>
+<Form.Select
+  value={newWorkflow.priorite}
+  onChange={e => setNewWorkflow({ ...newWorkflow, priorite: e.target.value })}
+  style={{ maxWidth: '220px' }}
+  aria-label="Priorité"
+>
+  <option value="">Priorité*</option>
+  <option value="élevée">Haute</option>
+  <option value="moyenne">Moyenne</option>
+  <option value="faible">Basse</option>
+</Form.Select>
+
       <Button
   variant="primary"
   onClick={handleCreateWorkflow}
@@ -463,28 +494,31 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
                   <td>{tasks.filter(t => t.workflow_id === wf.id).length} tâche(s)</td>
                   <td>
                     <Button variant="warning" size="sm" className="me-2" onClick={() => handleEditClick(wf)} title="Modifier">
-                      <i class="bi bi-pencil-square"></i>
+                      <i className="bi bi-pencil-square"></i>
                     </Button>
 
 
                     <Button variant="danger" size="sm" className="me-2" onClick={() => handleDeleteConfirm(wf.id, wf.name)} title="Supprimer">
-                      <i class="bi bi-trash"></i>
+                      <i className="bi bi-trash"></i>
                     </Button>
 
 
                     <Button variant="info" size="sm" className="me-2" onClick={() => handleDetailsClick(wf.id)} title="Tâches">
-                      <i class="bi bi-list-ul"></i>
+                      <i className="bi bi-list-ul"></i>
                     </Button>
 
 
                     <Button variant="success" size="sm" className="me-2" title="Valider">
-                      <i class="bi bi-check-circle"></i>
+                      <i className="bi bi-check-circle"></i>
                     </Button>
 
 
                     <Button variant="secondary" size="sm" title="Rejeter">
-                      <i class="bi bi-x-circle"></i>
+                      <i className="bi bi-x-circle"></i>
                     </Button>
+                  <button className="btn btn-sm btn-primary" onClick={() => setSelectedWorkflowId(wf.id)}>
+              BPMN
+            </button>
                   </td>
 
                 </tr>
@@ -492,7 +526,12 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
             })}
           </tbody>
         </Table>
-
+        {selectedWorkflowId && (
+        <>
+          <h4>Diagramme BPMN du workflow #{selectedWorkflowId}</h4>
+          <BpmnViewer workflowId={selectedWorkflowId} />
+        </>
+      )}
         <Pagination className="mt-3">
           {[...Array(Math.ceil(filteredWorkflows.length / workflowsPerPage)).keys()].map(number => (
             <Pagination.Item

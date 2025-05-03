@@ -23,10 +23,15 @@
     "multer": "^1.4.5-lts.2",
     "node-summarizer": "^1.0.7",
     "nodemailer": "^6.10.0",
+<<<<<<< HEAD
     "openai": "^4.96.2",
+=======
+    "openai": "^4.96.0",
+>>>>>>> 861b0c27e6f8c4c390e8a298c83804ef7b859adc
     "pdf-parse": "^1.1.1",
     "pg": "^8.14.1",
     "pg-hstore": "^2.3.4",
+    "postgres": "^3.4.5",
     "sequelize": "^6.37.7",
     "summarizer": "^1.0.0",
     "tesseract.js": "^6.0.1",
