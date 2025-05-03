@@ -12,6 +12,8 @@ const groupRoutes = require('./routes/groupe');
 const listTasksRoutes = require('./routes/listTasks');
 const workflowsRoutes = require("./routes/task");
 const notifRoutes = require("./routes/notif");
+const workRoutes = require("./routes/work");
+const aiRoutes = require("./routes/ai");
 const statsRoutes = require('./routes/stats');
 
 const app = express();
@@ -38,8 +40,10 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/list-tasks', listTasksRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/notifications', notifRoutes);
+app.use('/api/workflow', workRoutes);
+app.use('/api/ai', aiRoutes);
 // Lancement du serveur
-app.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 
 pool.connect()
   .then(() => console.log("✅ Connexion à la base de données réussie"))
