@@ -43,7 +43,7 @@ app.use('/api/notifications', notifRoutes);
 app.use('/api/workflow', workRoutes);
 app.use('/api/', aiRoutes);
 // Lancement du serveur
-app.listen(PORT, () => console.log(`Serveur lancé sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 
 pool.connect()
   .then(() => console.log("✅ Connexion à la base de données réussie"))

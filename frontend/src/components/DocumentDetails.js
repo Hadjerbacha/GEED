@@ -16,49 +16,51 @@ const DocumentDetails = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const axios = require("axios");
 
+  const [socket, setSocket] = useState(null);
 
-  useEffect(() => {
+  
 
-    console.log("ID document :", id);
-
-    const fetchDocument = async () => {
-      try {
-        const res = await fetch(`http://localhost:5000/api/documents/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error("Échec du chargement du document");
-        const doc = await res.json();
-        setDocument(doc);
-        setSelectedVersion(doc.version); // Initialiser la version sélectionnée
-      } catch (error) {
-        console.error("Erreur document :", error);
-        setErrorMessage("Impossible de charger le document.");
-      }
-    };
-
-
-
-
-
-    const fetchVersions = async () => {
-      try {
-        const res = await fetch(`http://localhost:5000/api/documents/versions/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (!res.ok) throw new Error("Échec du chargement des versions");
-        const versionList = await res.json();
-        setVersions(versionList);
-      } catch (error) {
-        console.error("Erreur versions :", error);
-      }
-    };
-
-    if (id && token) {
-      fetchDocument();
-      fetchVersions();
+useEffect(() => {
+  const fetchDocument = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/documents/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Échec du chargement du document");
+      const doc = await res.json();
+      setDocument(doc);
+      setSelectedVersion(doc.version);
+    } catch (error) {
+      console.error("Erreur document :", error);
+      setErrorMessage("Impossible de charger le document.");
     }
-  }, [id, token]);
+  };
+
+  const fetchVersions = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/documents/versions/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error("Échec du chargement des versions");
+      const versionList = await res.json();
+      setVersions(versionList);
+    } catch (error) {
+      console.error("Erreur versions :", error);
+    }
+  };
+
+  if (id && token) {
+    fetchDocument();
+    fetchVersions();
+  }
+}, [id, token]);
+
+    
+
+
+
 
   const handleVersionChange = async (e) => {
     const versionId = e.target.value;
@@ -79,36 +81,45 @@ const DocumentDetails = () => {
   };
 
 
+  
 
 
   const handleBack = () => {
     navigate('/documents');
   };
 
-  const handleSummarize = async () => {
+  const handleSummarize = () => {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      console.error("WebSocket non connecté");
+      setSummary("❌ Connexion WebSocket échouée.");
+      return;
+    }
+  
     setIsSummarizing(true);
     setSummary(null);
-
-    try {
-      const res = await fetch(`http://localhost:5000/api/documents/${id}/summarize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        }
-      });
-
-      if (!res.ok) throw new Error("Erreur lors de la génération du résumé.");
-
-      const data = await res.json();
-      setSummary(data.summary);
-    } catch (error) {
-      console.error("Erreur résumé :", error);
-      setSummary("❌ Impossible de générer le résumé.");
-    } finally {
-      setIsSummarizing(false);
-    }
+  
+    socket.send(JSON.stringify({ text: document.text_content }));
   };
+  
+
+  async function generateSummary(text) {
+    try {
+        const response = await axios.post(
+            "https://api-inference.huggingface.co/models/facebook/bart-large-cnn",
+            { inputs: text },
+            {
+                headers: {
+                    Authorization: `Bearer YOUR_HUGGINGFACE_API_KEY`,
+                },
+            }
+        );
+        return response.data[0].summary_text;
+    } catch (error) {
+        console.error("Erreur HuggingFace :", error.message);
+        return "Erreur lors du résumé avec HuggingFace.";
+    }
+}
+  
 
 
   return (

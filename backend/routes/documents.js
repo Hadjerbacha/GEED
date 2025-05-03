@@ -72,14 +72,14 @@ async function initializeDatabase() {
     // Table pour les documents
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
-  id SERIAL PRIMARY KEY,
-  name TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  category TEXT,
-  text_content TEXT,
-  owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-  visibility VARCHAR(20) DEFAULT 'private',
-  date TIMESTAMP DEFAULT NOW()
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      category TEXT,
+      text_content TEXT,
+      owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      visibility VARCHAR(20) DEFAULT 'private',
+      date TIMESTAMP DEFAULT NOW()
 );
 
     `);

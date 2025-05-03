@@ -13,6 +13,7 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.49.4",
+    "axios": "^1.9.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
@@ -22,14 +23,17 @@
     "jsonwebtoken": "^9.0.2",
     "mime-types": "^3.0.1",
     "multer": "^1.4.5-lts.2",
+    "node-summarizer": "^1.0.7",
     "nodemailer": "^6.10.0",
-    "openai": "^4.96.0",
+    "openai": "^4.96.2",
     "pdf-parse": "^1.1.1",
     "pg": "^8.14.1",
     "pg-hstore": "^2.3.4",
     "postgres": "^3.4.5",
     "sequelize": "^6.37.7",
+    "summarizer": "^1.0.0",
     "tesseract.js": "^6.0.1",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "ws": "^8.18.1"
   }
 }
