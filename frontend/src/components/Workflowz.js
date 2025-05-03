@@ -395,6 +395,7 @@ export default function WorkflowPage() {
                 {isAnalyzing ? 'Analyse en cours...' : 'Analyser avec IA'}
               </Button>
             </div>
+
           </div>
 
           {/* Panneau de statistiques */}

@@ -255,7 +255,7 @@ router.get('/:id/logs', authMiddleware, async (req, res) => {
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
 // Exemple : POST /api/workflows/:id/generate-tasks
-router.post("/:id/generate-tasks", async (req, res) => {
+router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
   const workflowId = req.params.id;
 
   try {

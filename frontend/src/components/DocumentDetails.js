@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import axios from 'axios';
 import Navbar from './Navbar';
 import { Container, Row, Col, Card, Button, Form } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -16,7 +17,6 @@ const DocumentDetails = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
-  const axios = require("axios");
 
   const [socket, setSocket] = useState(null);
 
@@ -58,6 +58,19 @@ useEffect(() => {
 }, [id, token]);
 
     
+const testAxios = async () => {
+  try {
+    const response = await axios.post(
+      "https://jsonplaceholder.typicode.com/posts", 
+      { title: "test", body: "This is a test", userId: 1 }
+    );
+    console.log("Réponse:", response);
+  } catch (error) {
+    console.error("Erreur Axios:", error);
+  }
+};
+
+testAxios();
 
 
 
@@ -88,37 +101,47 @@ useEffect(() => {
     navigate('/documents');
   };
 
-  const handleSummarize = () => {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      console.error("WebSocket non connecté");
-      setSummary("❌ Connexion WebSocket échouée.");
+  
+  
+
+  const handleSummarize = async () => {
+    if (!document || !document.text_content) {
+      setSummary("⚠️ Le document ne contient pas de texte à résumer.");
       return;
     }
   
     setIsSummarizing(true);
     setSummary(null);
   
-    socket.send(JSON.stringify({ text: document.text_content }));
+    try {
+      // Limiter le texte à 1000 caractères pour éviter un échec dû à une taille trop grande
+      const textToSummarize = document.text_content.length > 1000 
+        ? document.text_content.substring(0, 1000) 
+        : document.text_content;
+  
+      const summaryText = await generateSummary(textToSummarize);
+      setSummary(summaryText);
+    } catch (error) {
+      setSummary("❌ Impossible de générer le résumé.");
+    } finally {
+      setIsSummarizing(false);
+    }
   };
   
-
-  async function generateSummary(text) {
+  const generateSummary = async (text) => {
     try {
-        const response = await axios.post(
-            "https://api-inference.huggingface.co/models/facebook/bart-large-cnn",
-            { inputs: text },
-            {
-                headers: {
-                    Authorization: `Bearer YOUR_HUGGINGFACE_API_KEY`,
-                },
-            }
-        );
-        return response.data[0].summary_text;
+      const response = await axios.post(
+        "https://api-inference.huggingface.co/models/facebook/bart-large-cnn", 
+        { inputs: text }, 
+        { headers: { Authorization: `Bearer YOUR_HUGGINGFACE_API_KEY` } }
+      );
+      return response.data[0].summary_text;
     } catch (error) {
-        console.error("Erreur HuggingFace :", error.message);
-        return "Erreur lors du résumé avec HuggingFace.";
+      console.error("Erreur lors de la génération du résumé:", error);
+      return "Une erreur est survenue lors de la génération du résumé.";
     }
-}
+  };
+  
   
 
 
