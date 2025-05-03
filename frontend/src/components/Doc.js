@@ -7,6 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import 'react-toastify/dist/ReactToastify.css';
 import shareIcon from './share.png';
+import {jwtDecode} from 'jwt-decode';
+import { toast } from 'react-toastify';
 
 
 
@@ -53,6 +55,20 @@ const Doc = () => {
 
 
   const navigate = useNavigate();
+
+  const [userId, setUserId] = useState(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const { id } = jwtDecode(token);
+        setUserId(id);
+      } catch (e) {
+        console.error('Token invalide :', e);
+      }
+    }
+  }, []);
 
   //fonction MODAL
   const openShareModal = (doc) => {
@@ -257,6 +273,47 @@ const Doc = () => {
   });
 
 
+// En haut de ton composant Doc.js
+const [showConfirmModal, setShowConfirmModal] = useState(false);
+const [modalDoc, setModalDoc] = useState(null);
+const [autoWfName, setAutoWfName] = useState('');
+
+// Quand tu cliques sur le bouton, ouvre le modal
+const handleOpenConfirm = (doc) => {
+  setModalDoc(doc);
+  setAutoWfName(`WF_${doc.name}`);   // nom généré automatiquement
+  setShowConfirmModal(true);
+};
+
+// Confirme et crée
+const handleConfirmCreate = async () => {
+  try {
+    const token = localStorage.getItem('token');
+
+    // Générer la date du jour au format YYYY-MM-DD
+    const todayISO = new Date().toISOString().slice(0, 10);
+
+    const res = await axios.post(
+      'http://localhost:5000/api/workflows',
+      {
+        documentId: modalDoc.id,
+        name:       autoWfName,
+        status:     'pending',
+        template:   modalDoc.category,
+        created_by: userId,
+        echeance:   todayISO   // ← on transmet la date de création ici
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    toast.success('Workflow créé !');
+    setShowConfirmModal(false);
+    navigate(`/workflowz/${res.data.id}`, { state: { document: modalDoc } });
+  } catch (err) {
+    console.error(err);
+    toast.error('Erreur lors de la création du workflow');
+  }
+};
+
 
 
 
@@ -379,20 +436,7 @@ const Doc = () => {
           <tbody>
             {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
               <tr key={doc.id}>
-                <td>{doc.name} {doc.version && `(version ${doc.version})`}
-                  <button
-                    onClick={() => {
-                      setSelectedDoc(doc);  // Mettez à jour selectedDoc avec l'objet du document
-                      window.open(`http://localhost:5000${doc.file_path}`, '_blank');
-                      setShowModal(false);
-                    }}
-                    className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
-                    style={{ all: 'unset', cursor: 'pointer' }}
-                  >
-                    📄
-                  </button>
-
-                </td>
+                <td>{doc.name} {doc.version && `(version ${doc.version})`}</td>
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
@@ -413,15 +457,19 @@ const Doc = () => {
 
                   {/* Bouton de partage */}
                   <Button variant="light" onClick={() => openShareModal(doc)}>
-                    <img src={shareIcon} width="20" alt="Partager" />
+                  <img src={shareIcon} width="20" alt="Partager" />
+
                   </Button>
                   <Button
   variant="dark"
   size="sm"
   className="ms-2"
   title="Démarrer le workflow"
-  onClick={() => navigate('/test', { state: { document: doc } })}
-><i className="bi bi-play-fill me-1"></i></Button>
+  onClick={() => handleOpenConfirm(doc)}
+>
+  <i className="bi bi-play-fill me-1"></i>
+</Button>
+
 
 
                 </td>
@@ -484,22 +532,20 @@ const Doc = () => {
             <Button
               variant="primary"
               onClick={async () => {
+                const updatedDoc = {
+                  ...docToShare,
+                  access: shareAccessType,
+                  allowedUsers: shareUsers,
+                };
+
                 try {
-                  await axios.post(`http://localhost:5000/api/documents/${docToShare.id}/share`, {
-                    access: shareAccessType,
-                    allowedUsers: shareUsers,
-                  }, {
+                  await axios.put(`http://localhost:5000/api/documents/${docToShare.id}`, updatedDoc, {
                     headers: { Authorization: `Bearer ${token}` }
                   });
-
-                  setDocuments(docs => docs.map(doc =>
-                    doc.id === docToShare.id
-                      ? { ...doc, visibility: shareAccessType }  // ⚡ Update visibility in React state
-                      : doc
-                  ));
+                  setDocuments(docs => docs.map(doc => doc.id === docToShare.id ? updatedDoc : doc));
                   setShowShareModal(false);
                 } catch (err) {
-                  console.error('Erreur de partage', err);
+                  console.error('Erreur de mise à jour des permissions', err);
                 }
               }}
             >
@@ -507,6 +553,40 @@ const Doc = () => {
             </Button>
           </Modal.Footer>
         </Modal>
+        <Modal
+  show={showConfirmModal}
+  onHide={() => setShowConfirmModal(false)}
+  centered
+  style={{ zIndex: 1050 }}
+>
+  <Modal.Header closeButton>
+    <Modal.Title>Créer un nouveau workflow ?</Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    <p>Vous êtes sur le point de créer le workflow pour le document :</p>
+    <strong>{modalDoc?.name}</strong>
+    <hr />
+    <Form.Group>
+      <Form.Label>Nom du workflow</Form.Label>
+      <Form.Control
+        type="text"
+        value={autoWfName}
+        onChange={e => setAutoWfName(e.target.value)}
+      />
+      <Form.Text className="text-muted">
+        Vous pouvez modifier ce nom si besoin.
+      </Form.Text>
+    </Form.Group>
+  </Modal.Body>
+  <Modal.Footer>
+    <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>
+      Annuler
+    </Button>
+    <Button variant="primary" onClick={handleConfirmCreate}>
+      Créer
+    </Button>
+  </Modal.Footer>
+</Modal>
 
 
 

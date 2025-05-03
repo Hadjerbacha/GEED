@@ -5,6 +5,7 @@ import Login from './components/Login';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Workflows from './components/Workflowss';
 import Workflow from './components/Workflow';
+import Workflowz from './components/Workflowz';
 import Groupe from './components/Groupe';
 import Doc from './components/Document';
 import Document from './components/Doc';
@@ -19,6 +20,9 @@ import Register from './components/Register';
 import Folder from './components/Folder';
 import DocumentDetails from './components/DocumentDetails';
 import Test from './components/test'; // Importer le composant Test
+import Test2 from './components/test2'; // Importer le composant Test2
+import Test3 from './components/Test3'; // Importer le composant Test3
+import Test4 from './components/Test4'; // Importer le composant Test4
 import Notif from './components/Notification';
 import Statistique from './components/Statistique';
 function App() {
@@ -29,6 +33,10 @@ function App() {
           {/* Route non protégée */}
           <Route path="/" element={<Login />} />
           <Route path="/test" element={<Test />} />
+          <Route path="/test2" element={<Test2 />} />
+          <Route path="/test3" element={<Test3 />} />
+          <Route path="/test4" element={<Test4 />} />
+
           {/* Routes protégées */}
           <Route path="/accueil" element={<ProtectedRoute element={<Accueil />} />} />
           <Route path="/groupe" element={<ProtectedRoute element={<Groupe />} />} />
@@ -38,6 +46,7 @@ function App() {
           <Route path="/folder" element={<ProtectedRoute element={<Folder/>} />} />      
           <Route path="/workflows" element={<ProtectedRoute element={<Workflows />} />} />
           <Route path="/workflow" element={<ProtectedRoute element={<Workflow />} />} />
+          <Route path="/workflowz/:id" element={<ProtectedRoute element={<Workflowz />} />} />
           <Route path="/mes-taches" element={<ProtectedRoute element={<AssignedTasks />} />} />
           <Route path="/details/:id" element={<ProtectedRoute element={<Details />} />} />
           <Route path="/details_taches/:id" element={<ProtectedRoute element={<DetailsTache />} />} />
