@@ -200,9 +200,9 @@ const Navbar = () => {
 
 
       <nav className={sidebar ? 'nav-menu active' : 'nav-menu'} style={{ zIndex: 200 }}>
-        <ul className="nav-menu-items" onClick={showSidebar}>
+        <ul className="nav-menu-items shine-hover" onClick={showSidebar}>
           <li className="navbar-toggle">
-            <Link to="#" className="menu-bars">
+            <Link to="#" className="menu-bars shine-hover" >
               <AiIcons.AiOutlineClose />
             </Link>
           </li>

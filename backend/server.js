@@ -1,4 +1,5 @@
 require("dotenv").config();
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const pool = require("./config/db");
 const express = require("express");
 const cors = require("cors");
@@ -18,6 +19,8 @@ const statsRoutes = require('./routes/stats');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 
 // Middleware
 const corsOptions = {
