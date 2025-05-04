@@ -7,11 +7,8 @@ import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import 'react-toastify/dist/ReactToastify.css';
 import shareIcon from './share.png';
-import {jwtDecode} from 'jwt-decode';
+import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
-
-
-
 
 const Doc = () => {
   const [documents, setDocuments] = useState([]);
@@ -33,13 +30,13 @@ const Doc = () => {
 
   const [users, setUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
-
+  const [description, setDescription] = useState('');
 
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
   const [forceUpload, setForceUpload] = useState(false);
-
-
+  const [tags, setTags] = useState([]);
+  const [priority, setPriority] = useState('');
   const [accessType, setAccessType] = useState('private');
 
   //modal
@@ -52,8 +49,6 @@ const Doc = () => {
 
   const token = localStorage.getItem('token');
   const [isSaving, setIsSaving] = useState(false);
-
-
   const navigate = useNavigate();
 
   const [userId, setUserId] = useState(null);
@@ -188,6 +183,10 @@ const Doc = () => {
     formData.append('category', category);
     formData.append('access', accessType); // <-- ici : champ "access" attendu côté serveur
     formData.append('collectionName', collectionName);
+    formData.append('description', description);
+    formData.append('priority', priority);
+    formData.append('tags', JSON.stringify(tags));
+
 
     // Si l'accès est personnalisé, ajouter les utilisateurs autorisés
     if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
@@ -268,46 +267,71 @@ const Doc = () => {
   });
 
 
-// En haut de ton composant Doc.js
-const [showConfirmModal, setShowConfirmModal] = useState(false);
-const [modalDoc, setModalDoc] = useState(null);
-const [autoWfName, setAutoWfName] = useState('');
+  // En haut de ton composant Doc.js
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [modalDoc, setModalDoc] = useState(null);
+  const [autoWfName, setAutoWfName] = useState('');
 
-// Quand tu cliques sur le bouton, ouvre le modal
-const handleOpenConfirm = (doc) => {
-  setModalDoc(doc);
-  setAutoWfName(`WF_${doc.name}`);   // nom généré automatiquement
-  setShowConfirmModal(true);
+  // Quand tu cliques sur le bouton, ouvre le modal
+  const handleOpenConfirm = (doc) => {
+    setModalDoc(doc);
+    setAutoWfName(`WF_${doc.name}`);   // nom généré automatiquement
+    setShowConfirmModal(true);
+  };
+
+  const [showUploadForm, setShowUploadForm] = useState(false);
+const [formData, setFormData] = useState({
+  documentName: '',
+  category: '',
+  file: null,
+  accessType: 'private',
+  users: [],
+});
+
+const handleInputChange = (e) => {
+  const { name, value } = e.target;
+  setFormData((prev) => ({ ...prev, [name]: value }));
 };
 
-// Confirme et crée
-const handleConfirmCreate = async () => {
-  try {
-    const token = localStorage.getItem('token');
-
-    // Générer la date du jour au format YYYY-MM-DD
-    const todayISO = new Date().toISOString().slice(0, 10);
-
-    const res = await axios.post(
-      'http://localhost:5000/api/workflows',
-      {
-        documentId: modalDoc.id,
-        name:       autoWfName,
-        status:     'pending',
-        template:   modalDoc.category,
-        created_by: userId,
-        echeance:   todayISO   // ← on transmet la date de création ici
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    toast.success('Workflow créé !');
-    setShowConfirmModal(false);
-    navigate(`/workflowz/${res.data.id}`, { state: { document: modalDoc } });
-  } catch (err) {
-    console.error(err);
-    toast.error('Erreur lors de la création du workflow');
-  }
+const handleFileChange = (e) => {
+  setFormData((prev) => ({ ...prev, file: e.target.files[0] }));
 };
+
+const handleSubmit = (e) => {
+  e.preventDefault();
+  console.log('Form data:', formData);
+  // Tu pourras envoyer les données à l'API ici
+};
+
+
+  // Confirme et crée
+  const handleConfirmCreate = async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      // Générer la date du jour au format YYYY-MM-DD
+      const todayISO = new Date().toISOString().slice(0, 10);
+
+      const res = await axios.post(
+        'http://localhost:5000/api/workflows',
+        {
+          documentId: modalDoc.id,
+          name: autoWfName,
+          status: 'pending',
+          template: modalDoc.category,
+          created_by: userId,
+          echeance: todayISO   // ← on transmet la date de création ici
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Workflow créé !');
+      setShowConfirmModal(false);
+      navigate(`/workflowz/${res.data.id}`, { state: { document: modalDoc } });
+    } catch (err) {
+      console.error(err);
+      toast.error('Erreur lors de la création du workflow');
+    }
+  };
 
 
 
@@ -329,26 +353,32 @@ const handleConfirmCreate = async () => {
 
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
+        <Button variant="primary" onClick={() => setShowUploadForm(!showUploadForm)}>
+        {showUploadForm ? 'Annuler' : 'Télécharger un document'}
+      </Button>
+
+      {/* Form to upload document */}
+      {showUploadForm && (
         <Row className="mb-4">
           <Col md={2}>
             <Form.Control
               type="text"
               placeholder="Nom du document"
               value={pendingName}
-              onChange={e => setPendingName(e.target.value)}
+              onChange={(e) => setPendingName(e.target.value)}
             />
           </Col>
 
           <Col md={2}>
             <Form.Control
               type="file"
-              onChange={e => setPendingFile(e.target.files[0])}
+              onChange={(e) => setPendingFile(e.target.files[0])}
               accept=".pdf,.docx,.jpg,.jpeg,.png"
             />
           </Col>
 
           <Col md={2}>
-            <Form.Select value={category} onChange={e => setCategory(e.target.value)}>
+            <Form.Select value={category} onChange={(e) => setCategory(e.target.value)}>
               <option value="">Catégorie</option>
               <option value="rapport">Rapport</option>
               <option value="article">Article</option>
@@ -375,19 +405,48 @@ const handleConfirmCreate = async () => {
                 <Select
                   isMulti
                   options={users}
-                  value={users.filter(option =>
-                    allowedUsers.includes(option.value)
-                  )}
+                  value={users.filter(option => allowedUsers.includes(option.value))}
                   onChange={(selectedOptions) => {
                     const selectedUserIds = selectedOptions.map((opt) => opt.value);
                     setAllowedUsers(selectedUserIds);
                   }}
-                  placeholder="Select..."
+                  placeholder="Sélectionner des utilisateurs..."
                 />
               </Form.Group>
-
             </Col>
           )}
+
+          <Col md={2}>
+            <Form.Control
+              type="text"
+              placeholder="Description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
+          </Col>
+
+          <Col md={2}>
+            <Form.Select value={priority} onChange={(e) => setPriority(e.target.value)}>
+              <option value="">Priorité</option>
+              <option value="basse">Basse</option>
+              <option value="moyenne">Moyenne</option>
+              <option value="élevée">Élevée</option>
+            </Form.Select>
+          </Col>
+
+          <Col md={3}>
+            <Select
+              isMulti
+              placeholder="Tags..."
+              onChange={(selected) => setTags(selected.map(opt => opt.value))}
+              options={[
+                { value: 'RH', label: 'RH' },
+                { value: 'Finance', label: 'Finance' },
+                { value: 'Urgent', label: 'Urgent' },
+                { value: 'À réviser', label: 'À réviser' }
+              ]}
+            />
+          </Col>
 
           <Col md={2}>
             <OverlayTrigger
@@ -418,6 +477,8 @@ const handleConfirmCreate = async () => {
             </OverlayTrigger>
           </Col>
         </Row>
+  
+      )}
 
         <Table striped bordered hover responsive>
           <thead>
@@ -435,28 +496,28 @@ const handleConfirmCreate = async () => {
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
-                  <Button variant="info" size="sm" className="me-2" onClick={() =>  navigate(`/documents/${doc.id}`) } title="Détails">
-                                        <i className="bi bi-list-ul"></i>
-                                      </Button>
+                  <Button variant="info" size="sm" className="me-2" onClick={() => navigate(`/documents/${doc.id}`)} title="Détails">
+                    <i className="bi bi-list-ul"></i>
+                  </Button>
 
                   <Button variant="danger" size="sm" className="me-2" onClick={() => handleDelete(doc.id)} title="Supprimer">
-                      <i className="bi bi-trash"></i>
-                    </Button>
+                    <i className="bi bi-trash"></i>
+                  </Button>
 
                   {/* Bouton de partage */}
                   <Button variant="light" onClick={() => openShareModal(doc)}>
-                  <img src={shareIcon} width="20" alt="Partager" />
+                    <img src={shareIcon} width="20" alt="Partager" />
 
                   </Button>
                   <Button
-  variant="dark"
-  size="sm"
-  className="ms-2"
-  title="Démarrer le workflow"
-  onClick={() => handleOpenConfirm(doc)}
->
-  <i className="bi bi-play-fill me-1"></i>
-</Button>
+                    variant="dark"
+                    size="sm"
+                    className="ms-2"
+                    title="Démarrer le workflow"
+                    onClick={() => handleOpenConfirm(doc)}
+                  >
+                    <i className="bi bi-play-fill me-1"></i>
+                  </Button>
 
 
 
@@ -542,39 +603,39 @@ const handleConfirmCreate = async () => {
           </Modal.Footer>
         </Modal>
         <Modal
-  show={showConfirmModal}
-  onHide={() => setShowConfirmModal(false)}
-  centered
-  style={{ zIndex: 1050 }}
->
-  <Modal.Header closeButton>
-    <Modal.Title>Créer un nouveau workflow ?</Modal.Title>
-  </Modal.Header>
-  <Modal.Body>
-    <p>Vous êtes sur le point de créer le workflow pour le document :</p>
-    <strong>{modalDoc?.name}</strong>
-    <hr />
-    <Form.Group>
-      <Form.Label>Nom du workflow</Form.Label>
-      <Form.Control
-        type="text"
-        value={autoWfName}
-        onChange={e => setAutoWfName(e.target.value)}
-      />
-      <Form.Text className="text-muted">
-        Vous pouvez modifier ce nom si besoin.
-      </Form.Text>
-    </Form.Group>
-  </Modal.Body>
-  <Modal.Footer>
-    <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>
-      Annuler
-    </Button>
-    <Button variant="primary" onClick={handleConfirmCreate}>
-      Créer
-    </Button>
-  </Modal.Footer>
-</Modal>
+          show={showConfirmModal}
+          onHide={() => setShowConfirmModal(false)}
+          centered
+          style={{ zIndex: 1050 }}
+        >
+          <Modal.Header closeButton>
+            <Modal.Title>Créer un nouveau workflow ?</Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            <p>Vous êtes sur le point de créer le workflow pour le document :</p>
+            <strong>{modalDoc?.name}</strong>
+            <hr />
+            <Form.Group>
+              <Form.Label>Nom du workflow</Form.Label>
+              <Form.Control
+                type="text"
+                value={autoWfName}
+                onChange={e => setAutoWfName(e.target.value)}
+              />
+              <Form.Text className="text-muted">
+                Vous pouvez modifier ce nom si besoin.
+              </Form.Text>
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>
+              Annuler
+            </Button>
+            <Button variant="primary" onClick={handleConfirmCreate}>
+              Créer
+            </Button>
+          </Modal.Footer>
+        </Modal>
 
 
 
