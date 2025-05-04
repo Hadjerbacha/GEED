@@ -4,6 +4,8 @@ const pool = require('../config/db');
 const authMiddleware = require('../middleware/authMiddleware');
 const { logWorkflowAction } = require('../utils/log');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { analyzeWorkflowWithGemini } = require('./gimini');
+const { getWorkflowFromDB } = require('./service');
 // ➕ Ajouter un workflow
 router.post('/', async (req, res) => {
   const { name, description, echeance, status, priorite, created_by } = req.body;
@@ -302,4 +304,42 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
   }
 });
 
+// Route pour analyser les logs avec Gemini
+  router.post('/:id/analyze-logs', authMiddleware, async (req, res) => {
+    try {
+
+      const { workflowId } = req.params; // Récupération depuis les paramètres d'URL
+    const { prompt } = req.body;
+
+    if (!workflowId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: "Workflow ID est requis" 
+      });
+    }
+      
+      // Récupération du workflow
+      const workflow = await getWorkflowFromDB(workflowId);
+  
+      // Analyse avec Gemini
+      const analysis = await analyzeWorkflowWithGemini(prompt, {
+        name: workflow.name,
+        description: workflow.description,
+        status: workflow.status,
+        stepsCount: workflow.steps.length
+      });
+  
+      res.json({ 
+        success: true,
+        analysis: analysis
+      });
+      
+    } catch (error) {
+      console.error('Erreur analyse logs:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || "Échec de l'analyse des logs"
+      });
+    }
+  });
 module.exports = router;
