@@ -145,11 +145,6 @@ const Doc = () => {
     }
   };
 
-  const toggleSaveDocument = doc => {
-    const exists = savedDocuments.some(d => d.id === doc.id);
-    setSavedDocuments(exists ? savedDocuments.filter(d => d.id !== doc.id) : [...savedDocuments, doc]);
-    setIsSavingCollection(true);
-  };
 
   // Déclaration de la liste des utilisateurs autorisés
   const [allowedUsers, setAllowedUsers] = useState([]);
@@ -440,20 +435,13 @@ const handleConfirmCreate = async () => {
                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                 <td>{doc.category || 'Non spécifiée'}</td>
                 <td>
-                  <Button
-                    size="sm"
-                    variant="info"
-                    onClick={() => navigate(`/documents/${doc.id}`)}
-                  >
-                    Détails
-                  </Button>
+                  <Button variant="info" size="sm" className="me-2" onClick={() =>  navigate(`/documents/${doc.id}`) } title="Détails">
+                                        <i className="bi bi-list-ul"></i>
+                                      </Button>
 
-                  <Button size="sm" variant="danger" onClick={() => handleDelete(doc.id)}>
-                    Supprimer
-                  </Button>{' '}
-                  <Button size="sm" variant="success" onClick={() => toggleSaveDocument(doc)}>
-                    {savedDocuments.some(d => d.id === doc.id) ? 'Retirer' : 'Save'}
-                  </Button>
+                  <Button variant="danger" size="sm" className="me-2" onClick={() => handleDelete(doc.id)} title="Supprimer">
+                      <i className="bi bi-trash"></i>
+                    </Button>
 
                   {/* Bouton de partage */}
                   <Button variant="light" onClick={() => openShareModal(doc)}>

@@ -185,7 +185,7 @@ const Navbar = () => {
               </Dropdown.Toggle>
 
               <Dropdown.Menu>
-                <Dropdown.Item href="/help">Aide</Dropdown.Item>
+                <Dropdown.Item href="/reclamation">Aide</Dropdown.Item>
                 <Dropdown.Divider />
                 <Dropdown.Item onClick={handleLogout} className="text-danger">
                   Déconnexion

@@ -25,6 +25,9 @@ import Test3 from './components/Test3'; // Importer le composant Test3
 import Test4 from './components/Test4'; // Importer le composant Test4
 import Notif from './components/Notification';
 import Statistique from './components/Statistique';
+import Reclamation from './components/Reclamation';
+
+
 function App() {
   return (
     <Router>
@@ -55,6 +58,7 @@ function App() {
           <Route path="/Documents/:id" element={<ProtectedRoute element={<DocumentDetails />} />} />
           <Route path="/statistique" element={<ProtectedRoute element={<Statistique />} />} />
           <Route path="/notif" element={<ProtectedRoute element={<Notif />} />} />
+          <Route path="/Reclamation" element={<ProtectedRoute element={<Reclamation />} />} />
         </Routes>
       </Container>
     </Router>

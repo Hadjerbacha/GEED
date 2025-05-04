@@ -130,18 +130,16 @@ testAxios();
   
   const generateSummary = async (text) => {
     try {
-      const response = await axios.post(
-        "https://api-inference.huggingface.co/models/facebook/bart-large-cnn", 
-        { inputs: text }, 
-        { headers: { Authorization: `Bearer YOUR_HUGGINGFACE_API_KEY` } }
-      );
-      return response.data[0].summary_text;
+      const response = await axios.post("http://localhost:5000/api/summarize", {
+        text
+      });
+  
+      return response.data.summary;
     } catch (error) {
       console.error("Erreur lors de la génération du résumé:", error);
-      return "Une erreur est survenue lors de la génération du résumé.";
+      return "❌ Une erreur est survenue avec l’API Google.";
     }
   };
-  
   
 
 

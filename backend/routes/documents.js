@@ -452,6 +452,46 @@ router.get('/stats', async (req, res) => {
   }
 });
 
+router.post('/', async (req, res) => {
+  const { text } = req.body;
+
+  if (!text) return res.status(400).json({ error: "Texte manquant." });
+
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "Tu es un assistant qui résume les documents de manière concise en français.",
+          },
+          {
+            role: "user",
+            content: `Voici un texte à résumer :\n${text}`,
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+      }
+    );
+
+    const summary = response.data.choices[0].message.content;
+    res.json({ summary });
+
+  } catch (error) {
+    console.error("Erreur OpenAI:", error.response?.data || error.message);
+    res.status(500).json({ error: "Erreur lors de la génération du résumé." });
+  }
+});
+
 
 // Initialisation des tables
 initializeDatabase();

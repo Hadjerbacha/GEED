@@ -17,6 +17,9 @@ const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
 const statsRoutes = require('./routes/stats');
 
+
+
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -32,6 +35,9 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', statsRoutes);
+const summarizeRoute = require('./routes/summarize');
+app.use('/api/summarize', summarizeRoute);
+
 
 
 // Routes
