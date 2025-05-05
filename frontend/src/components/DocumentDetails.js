@@ -165,6 +165,7 @@ testAxios();
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-2"
+                onClick={() => navigate(`/docvoir/${document.id}`)}
               >
                 🔍 Voir le document
               </Button>

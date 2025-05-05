@@ -27,6 +27,7 @@ import Notif from './components/Notification';
 import Statistique from './components/Statistique';
 import Reclamation from './components/Reclamation';
 import ReclamationList from './components/ReclamationList';
+import DocVoir from './components/DocVoir';
 
 
 function App() {
@@ -61,6 +62,9 @@ function App() {
           <Route path="/notif" element={<ProtectedRoute element={<Notif />} />} />
           <Route path="/Reclamation" element={<ProtectedRoute element={<Reclamation />} />} />
           <Route path="/ReclamationList" element={<ProtectedRoute element={<ReclamationList />} />} />
+          <Route path="/DocVoir" element={<ProtectedRoute element={<DocVoir />} />} />
+          <Route path="/docvoir/:id" element={<ProtectedRoute element={<DocVoir />} />} />
+
         </Routes>
       </Container>
     </Router>

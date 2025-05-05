@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Card, Spinner ,Tooltip, OverlayTrigger, Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
+import { Card, Spinner, Tooltip, OverlayTrigger, Container, Row, Col, Button, Form, Table, Alert, InputGroup, FormControl, Modal } from 'react-bootstrap';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
@@ -9,7 +9,7 @@ import 'react-toastify/dist/ReactToastify.css';
 import shareIcon from './share.png';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
-import { FaCloudUploadAlt } from 'react-icons/fa'; 
+import { FaCloudUploadAlt } from 'react-icons/fa';
 
 const Doc = () => {
   const [documents, setDocuments] = useState([]);
@@ -281,28 +281,28 @@ const Doc = () => {
   };
 
   const [showUploadForm, setShowUploadForm] = useState(false);
-const [formData, setFormData] = useState({
-  documentName: '',
-  category: '',
-  file: null,
-  accessType: 'private',
-  users: [],
-});
+  const [formData, setFormData] = useState({
+    documentName: '',
+    category: '',
+    file: null,
+    accessType: 'private',
+    users: [],
+  });
 
-const handleInputChange = (e) => {
-  const { name, value } = e.target;
-  setFormData((prev) => ({ ...prev, [name]: value }));
-};
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-const handleFileChange = (e) => {
-  setFormData((prev) => ({ ...prev, file: e.target.files[0] }));
-};
+  const handleFileChange = (e) => {
+    setFormData((prev) => ({ ...prev, file: e.target.files[0] }));
+  };
 
-const handleSubmit = (e) => {
-  e.preventDefault();
-  console.log('Form data:', formData);
-  // Tu pourras envoyer les données à l'API ici
-};
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    console.log('Form data:', formData);
+    // Tu pourras envoyer les données à l'API ici
+  };
 
 
   // Confirme et crée
@@ -354,218 +354,233 @@ const handleSubmit = (e) => {
 
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
-       
+
 
         <Container className="mt-5 d-flex justify-content-center">
-  <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
-    <Card.Body>
-      <h3 className="text-center mb-4">📂 Liste des documents</h3>
+          <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
+            <Card.Body>
+              <h3 className="text-center mb-4">📂 Liste des documents</h3>
 
-      {/* Bouton Annuler / Télécharger */}
-      <Button
-        variant={showUploadForm ? "danger" : "primary"} // Le bouton devient rouge quand on veut annuler
-        onClick={() => setShowUploadForm(!showUploadForm)}
-        className="mb-4"
-        style={{ marginBottom: "1rem" }}
-      >
-        {showUploadForm ? 'Annuler' : 'Télécharger un document'}
-      </Button>
-
-      {/* Formulaire d'upload */}
-      <Row className="mb-4">
-        {showUploadForm && (
-          <>
-            {/* Champ Nom du Document */}
-            <Col md={3} className="mb-3">
-              <Form.Control
-                type="text"
-                placeholder="Nom du document"
-                value={pendingName}
-                onChange={(e) => setPendingName(e.target.value)}
-                className="rounded-3"
-              />
-            </Col>
-
-            {/* Champ Upload avec Icône */}
-            <Col md={3} className="mb-3 d-flex justify-content-between align-items-center">
-              <input
-                type="file"
-                id="file-upload"
-                style={{ display: 'none' }} // Masquer l'input file
-                accept=".pdf,.docx,.jpg,.jpeg,.png"
-                onChange={handleFileChange}
-              />
+              {/* Bouton Annuler / Télécharger */}
               <Button
-                variant="outline-primary"
-                onClick={() => document.getElementById('file-upload').click()} // Déclenche le click de l'input file
-                className="d-flex align-items-center rounded-3 px-4"
+                variant={showUploadForm ? "danger" : "primary"} // Le bouton devient rouge quand on veut annuler
+                onClick={() => setShowUploadForm(!showUploadForm)}
+                className="mb-4"
+                style={{ marginBottom: "1rem" }}
               >
-                <FaCloudUploadAlt size={20} className="me-2" />
-                {pendingFile ? pendingFile.name : 'Choisir un fichier'}
+                {showUploadForm ? 'Annuler' : 'Télécharger un document'}
               </Button>
-            </Col>
 
-            {/* Sélecteur de Catégorie */}
-            <Col md={2} className="mb-3">
-              <Form.Select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="rounded-3"
-              >
-                <option value="">Catégorie</option>
-                <option value="rapport">Rapport</option>
-                <option value="article">Article</option>
-                <option value="mémoire">Mémoire</option>
-                <option value="autre">Autre</option>
-              </Form.Select>
-            </Col>
+              <Card.Body>
 
-            {/* Sélecteur d'Accès */}
-            <Col md={2} className="mb-3">
-              <Form.Select
-                value={accessType}
-                onChange={(e) => setAccessType(e.target.value)}
-                className="rounded-3"
-              >
-                <option value="private">Privé</option>
-                <option value="public">Tous les utilisateurs</option>
-                <option value="custom">Utilisateurs spécifiques</option>
-              </Form.Select>
-            </Col>
+                {/* Formulaire d'upload avec une Card pour les champs */}
+                {showUploadForm && (
+                  <Card className="mb-4 p-4">
+                    <Row className="mb-3">
+                      {/* Champ Nom du Document */}
+                      <Col md={3} className="mb-3">
+                        <Form.Control
+                          type="text"
+                          placeholder="Nom du document"
+                          value={pendingName}
+                          onChange={(e) => setPendingName(e.target.value)}
+                          className="rounded-3"
+                        />
+                      </Col>
 
-            {/* Liste des utilisateurs autorisés si custom */}
-            {accessType === 'custom' && (
-              <Col md={3} className="mb-3">
-                <Form.Control
-                  type="text"
-                  placeholder="Utilisateurs autorisés"
-                  value={allowedUsers.join(', ')}
-                  onChange={(e) => setAllowedUsers(e.target.value.split(','))}
-                  className="rounded-3"
-                />
-              </Col>
-            )}
+                      {/* Champ Upload avec Icône */}
+                      <Col md={3} className="mb-3 d-flex justify-content-between align-items-center">
+                        <input
+                          type="file"
+                          id="file-upload"
+                          style={{ display: 'none' }} // Masquer l'input file
+                          accept=".pdf,.docx,.jpg,.jpeg,.png"
+                          onChange={handleFileChange}
+                        />
+                        <Button
+                          variant="outline-primary"
+                          onClick={() => document.getElementById('file-upload').click()} // Déclenche le click de l'input file
+                          className="d-flex align-items-center rounded-3 px-4"
+                        >
+                          <FaCloudUploadAlt size={20} className="me-2" />
+                          {pendingFile ? pendingFile.name : 'Choisir un fichier'}
+                        </Button>
+                      </Col>
 
-            {/* Champ Description */}
-            <Col md={3} className="mb-3">
-              <Form.Control
-                type="text"
-                placeholder="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="rounded-3"
-              />
-            </Col>
+                      {/* Sélecteur de Catégorie */}
+                      <Col md={2} className="mb-3">
+                        <Form.Select
+                          value={category}
+                          onChange={(e) => setCategory(e.target.value)}
+                          className="rounded-3"
+                        >
+                          <option value="">Catégorie</option>
+                          <option value="rapport">Rapport</option>
+                          <option value="article">Article</option>
+                          <option value="mémoire">Mémoire</option>
+                          <option value="autre">Autre</option>
+                        </Form.Select>
+                      </Col>
 
-            {/* Sélecteur de Priorité */}
-            <Col md={2} className="mb-3">
-              <Form.Select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value)}
-                className="rounded-3"
-              >
-                <option value="">Priorité</option>
-                <option value="basse">Basse</option>
-                <option value="moyenne">Moyenne</option>
-                <option value="élevée">Élevée</option>
-              </Form.Select>
-            </Col>
+                      {/* Sélecteur d'Accès */}
+                      <Col md={2} className="mb-3">
+                        <Form.Select
+                          value={accessType}
+                          onChange={(e) => setAccessType(e.target.value)}
+                          className="rounded-3"
+                        >
+                          <option value="private">Privé</option>
+                          <option value="public">Tous les utilisateurs</option>
+                          <option value="custom">Utilisateurs spécifiques</option>
+                        </Form.Select>
+                      </Col>
 
-            {/* Champ de Tags */}
-            <Col md={3} className="mb-3">
-              <Form.Control
-                type="text"
-                placeholder="Mots clés"
-                value={tags.join(', ')}
-                onChange={(e) => setTags(e.target.value.split(','))}
-                className="rounded-3"
-              />
-            </Col>
+                      {/* Liste des utilisateurs autorisés si custom */}
+                      {accessType === 'custom' && (
+                        <Col md={3} className="mb-3">
+                          <Form.Control
+                            type="text"
+                            placeholder="Utilisateurs autorisés"
+                            value={allowedUsers.join(', ')}
+                            onChange={(e) => setAllowedUsers(e.target.value.split(','))}
+                            className="rounded-3"
+                          />
+                        </Col>
+                      )}
 
-            {/* Bouton d'upload */}
-            <Col md={2} className="mb-3 d-flex justify-content-center align-items-center">
-              <OverlayTrigger
-                placement="top"
-                overlay={
-                  accessType === 'custom' && allowedUsers.length === 0 ? (
-                    <Tooltip id="tooltip-disabled">
-                      Veuillez sélectionner au moins un utilisateur.
-                    </Tooltip>
-                  ) : (
-                    <></>
-                  )
-                }
-              >
-                <Button
-                  onClick={handleUpload}
-                  disabled={accessType === 'custom' && allowedUsers.length === 0}
-                  className="rounded-3"
-                  style={
-                    accessType === 'custom' && allowedUsers.length === 0
-                      ? { pointerEvents: 'none' }
-                      : {}
-                  }
-                >
-                  Uploader
-                </Button>
-              </OverlayTrigger>
-            </Col>
-          </>
-        )}
-      </Row>
-      <Table striped bordered hover responsive>
-          <thead>
-            <tr>
-              <th>Document</th>
-              <th>Date</th>
-              <th>Catégorie</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
-              <tr key={doc.id}>
-                <td>{doc.name} {doc.version && `(version ${doc.version})`}</td>
-                <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
-                <td>{doc.category || 'Non spécifiée'}</td>
-                <td>
-                  <Button variant="info" size="sm" className="me-2" onClick={() => navigate(`/documents/${doc.id}`)} title="Détails">
-                    <i className="bi bi-list-ul"></i>
-                  </Button>
+                      {/* Champ Description */}
+                      <Col md={3} className="mb-3">
+                        <Form.Control
+                          type="text"
+                          placeholder="Description"
+                          value={description}
+                          onChange={(e) => setDescription(e.target.value)}
+                          className="rounded-3"
+                        />
+                      </Col>
 
-                  <Button variant="danger" size="sm" className="me-2" onClick={() => handleDelete(doc.id)} title="Supprimer">
-                    <i className="bi bi-trash"></i>
-                  </Button>
+                      {/* Sélecteur de Priorité */}
+                      <Col md={2} className="mb-3">
+                        <Form.Select
+                          value={priority}
+                          onChange={(e) => setPriority(e.target.value)}
+                          className="rounded-3"
+                        >
+                          <option value="">Priorité</option>
+                          <option value="basse">Basse</option>
+                          <option value="moyenne">Moyenne</option>
+                          <option value="élevée">Élevée</option>
+                        </Form.Select>
+                      </Col>
 
-                  {/* Bouton de partage */}
-                  <Button variant="light" onClick={() => openShareModal(doc)}>
-                    <img src={shareIcon} width="20" alt="Partager" />
+                      {/* Champ de Tags */}
+                      <Col md={3} className="mb-3">
+                        <Form.Control
+                          type="text"
+                          placeholder="Mots clés"
+                          value={tags.join(', ')}
+                          onChange={(e) => setTags(e.target.value.split(','))}
+                          className="rounded-3"
+                        />
+                      </Col>
 
-                  </Button>
-                  <Button
-                    variant="dark"
-                    size="sm"
-                    className="ms-2"
-                    title="Démarrer le workflow"
-                    onClick={() => handleOpenConfirm(doc)}
-                  >
-                    <i className="bi bi-play-fill me-1"></i>
-                  </Button>
+                      {/* Bouton d'upload */}
+                      <Col md={2} className="mb-3 d-flex justify-content-center align-items-center">
+                        <OverlayTrigger
+                          placement="top"
+                          overlay={
+                            accessType === 'custom' && allowedUsers.length === 0 ? (
+                              <Tooltip id="tooltip-disabled">
+                                Veuillez sélectionner au moins un utilisateur.
+                              </Tooltip>
+                            ) : (
+                              <></>
+                            )
+                          }
+                        >
+                          <Button
+                            onClick={handleUpload}
+                            disabled={accessType === 'custom' && allowedUsers.length === 0}
+                            className="rounded-3"
+                            style={
+                              accessType === 'custom' && allowedUsers.length === 0
+                                ? { pointerEvents: 'none' }
+                                : {}
+                            }
+                          >
+                            Uploader
+                          </Button>
+                        </OverlayTrigger>
+                      </Col>
+                    </Row>
+                  </Card>
+                )}
+              </Card.Body>
+
+              <Table striped bordered hover responsive>
+                <thead>
+                  <tr>
+                    <th>Document</th>
+                    <th>Date</th>
+                    <th>Catégorie</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
+                    <tr key={doc.id}>
+                      <td>{doc.name} {doc.version && `(version ${doc.version})`}<button
+                        onClick={() => {
+                          setSelectedDoc(doc);  // Facultatif, si tu veux toujours garder ça
+                          navigate(`/docvoir/${doc.id}`); // redirection vers DocVoir avec l’ID du doc
+                          setShowModal(false);
+                        }}
+                        className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                        style={{ all: 'unset', cursor: 'pointer' }}
+                      >
+                        📄
+                      </button>
+                      </td>
+                      <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
+                      <td>{doc.category || 'Non spécifiée'}</td>
+                      <td>
+                        <Button variant="info" size="sm" className="me-2" onClick={() => navigate(`/documents/${doc.id}`)} title="Détails">
+                          <i className="bi bi-list-ul"></i>
+                        </Button>
+
+                        <Button variant="danger" size="sm" className="me-2" onClick={() => handleDelete(doc.id)} title="Supprimer">
+                          <i className="bi bi-trash"></i>
+                        </Button>
+
+                        {/* Bouton de partage */}
+                        <Button variant="light" onClick={() => openShareModal(doc)}>
+                          <img src={shareIcon} width="20" alt="Partager" />
+
+                        </Button>
+                        <Button
+                          variant="dark"
+                          size="sm"
+                          className="ms-2"
+                          title="Démarrer le workflow"
+                          onClick={() => handleOpenConfirm(doc)}
+                        >
+                          <i className="bi bi-play-fill me-1"></i>
+                        </Button>
 
 
 
-                </td>
+                      </td>
 
-              </tr>
-            )) : (
-              <tr><td colSpan="4" className="text-center">Aucun document trouvé</td></tr>
-            )}
+                    </tr>
+                  )) : (
+                    <tr><td colSpan="4" className="text-center">Aucun document trouvé</td></tr>
+                  )}
 
-          </tbody>
-          </Table>
-    </Card.Body>
-  </Card>
-</Container>
+                </tbody>
+              </Table>
+            </Card.Body>
+          </Card>
+        </Container>
         <Modal
           show={showShareModal}
           onHide={() => setShowShareModal(false)}
