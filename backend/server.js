@@ -15,6 +15,7 @@ const workflowsRoutes = require("./routes/task");
 const notifRoutes = require("./routes/notif");
 const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
+const reclamationRoutes = require('./routes/reclamation');
 const statsRoutes = require('./routes/stats');
 
 
@@ -50,6 +51,7 @@ app.use('/api/list-tasks', listTasksRoutes);
 app.use('/api/workflows', workflowsRoutes);
 app.use('/api/notifications', notifRoutes);
 app.use('/api/workflow', workRoutes);
+app.use('/api/reclamations', reclamationRoutes);
 app.use('/api/', aiRoutes);
 // Lancement du serveur
 app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));

@@ -121,6 +121,11 @@ const Navbar = () => {
       path: currentUser?.role === 'admin' ? '/archive' : '/archiveUser',
       icon: <FaIcons.FaArchive />,
     },
+    currentUser?.role === 'admin' && {
+      title: 'Reclamation',
+      path: '/ReclamationList',
+      icon: <FaIcons.FaInbox />,
+    },
   ];
 
   return (

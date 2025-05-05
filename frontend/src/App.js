@@ -26,6 +26,7 @@ import Test4 from './components/Test4'; // Importer le composant Test4
 import Notif from './components/Notification';
 import Statistique from './components/Statistique';
 import Reclamation from './components/Reclamation';
+import ReclamationList from './components/ReclamationList';
 
 
 function App() {
@@ -59,6 +60,7 @@ function App() {
           <Route path="/statistique" element={<ProtectedRoute element={<Statistique />} />} />
           <Route path="/notif" element={<ProtectedRoute element={<Notif />} />} />
           <Route path="/Reclamation" element={<ProtectedRoute element={<Reclamation />} />} />
+          <Route path="/ReclamationList" element={<ProtectedRoute element={<ReclamationList />} />} />
         </Routes>
       </Container>
     </Router>
