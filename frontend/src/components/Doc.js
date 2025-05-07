@@ -245,16 +245,35 @@ const Doc = () => {
     setConflictingDocName('');
   };
   
+// Étape 1 : Garder seulement la dernière version pour chaque nom de document
+const latestVersionsMap = new Map();
 
-  const filteredDocuments = documents.filter(doc => {
-    const docName = doc.name || '';
-    const docDate = doc.date ? new Date(doc.date) : null;
-    const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
-    const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
-    const matchesSearch = docName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesAdvanced = useAdvancedFilter && (doc.text_content || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesDate && (matchesSearch || matchesAdvanced);
-  });
+documents.forEach(doc => {
+  const existing = latestVersionsMap.get(doc.name);
+  if (!existing || doc.version > existing.version) {
+    latestVersionsMap.set(doc.name, doc);
+  }
+});
+
+const latestDocuments = Array.from(latestVersionsMap.values());
+
+// Étape 2 : Appliquer les filtres existants sur ces derniers documents
+const filteredDocuments = latestDocuments.filter(doc => {
+  const docName = doc.name || '';
+  const docDate = doc.date ? new Date(doc.date) : null;
+  const docContent = doc.text_content || '';
+
+  const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
+  const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
+
+  const matchesSearch = useAdvancedFilter
+    ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
+    : docName.toLowerCase().includes(searchQuery.toLowerCase());
+
+  return matchesType && matchesDate && matchesSearch;
+});
+
+
 
 
   // En haut de ton composant Doc.js
@@ -548,7 +567,7 @@ const Doc = () => {
                 <tbody>
                   {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
                     <tr key={doc.id}>
-                      <td>{doc.name} {doc.version && `(version ${doc.version})`}<button
+                      <td>{doc.name} <button
                         onClick={() => {
                           setSelectedDoc(doc);  // Facultatif, si tu veux toujours garder ça
                           navigate(`/docvoir/${doc.id}`); // redirection vers DocVoir avec l’ID du doc

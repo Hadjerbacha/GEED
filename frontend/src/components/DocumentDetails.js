@@ -3,6 +3,7 @@ import axios from 'axios';
 import Navbar from './Navbar';
 import { Container, Row, Col, Card, Button, Form, Alert } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 
 const DocumentDetails = () => {
   const { id } = useParams();
@@ -14,6 +15,10 @@ const DocumentDetails = () => {
   const navigate = useNavigate();
   const [summary, setSummary] = useState(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [userId, setUserId] = useState("");
+  const [currentUser, setCurrentUser] = useState(null);
+
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -30,6 +35,7 @@ const DocumentDetails = () => {
         setErrorMessage("Impossible de charger le document.");
       }
     };
+
 
     const fetchVersions = async () => {
       try {
@@ -105,6 +111,8 @@ const DocumentDetails = () => {
     }
   };
 
+
+
   const renderDocumentViewer = () => {
     if (!document || !document.file_path) return null;
 
@@ -127,6 +135,59 @@ const DocumentDetails = () => {
       return <Alert variant="warning">Format non supporté.</Alert>;
     }
   };
+
+  const handleRequestAccess = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/notifications/request-version-access`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          documentId: id,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Erreur lors de la demande");
+
+      alert("✅ Votre demande d'accès a été envoyée à l'administrateur.");
+    } catch (error) {
+      console.error("Erreur demande accès :", error);
+      alert("❌ Une erreur est survenue lors de la demande.");
+    }
+  };
+
+  // Décoder JWT pour récupérer userId
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const decoded = jwtDecode(token);
+      setUserId(decoded.id); // ici tu fixes le problème
+    }
+  }, []);
+
+  useEffect(() => {
+    fetch('http://localhost:5000/api/auth/users')
+      .then(res => res.json())
+      .then(data => setUsers(data))
+      .catch(err => console.error('Erreur chargement utilisateurs :', err));
+  }, []);
+
+  // Associer userId au user courant
+  useEffect(() => {
+    if (userId && users.length > 0) {
+      const found = users.find(u => u.id === userId);
+      if (found) setCurrentUser(found);
+    }
+  }, [userId, users]);
+
+
+  console.log("Liste des utilisateurs:", users);
+  console.log("userId:", userId, "typeof:", typeof userId);
+  console.log("users[0].id typeof:", typeof users[0]?.id);
+  console.log("currentUser:", currentUser);
+  console.log("Versions:", versions.length);
 
   return (
     <>
@@ -160,6 +221,24 @@ const DocumentDetails = () => {
                   <p><strong>Collection :</strong> {document.collectionName || 'Aucune'}</p>
                   <p><strong>Date d’upload :</strong> {new Date(document.createdAt).toLocaleString()}</p>
                   <p><strong>Visibilité :</strong> {document.visibility}</p>
+
+                  {document.version !== undefined && document.version !== null && (
+                    <p className="mt-4">
+                      <strong>ℹ️ Version actuelle :</strong> {document.version}
+                      {document.version > 1 && currentUser?.role !== 'admin' && (
+                    <Button
+                      variant="warning"
+                      className="mt-2"
+                      onClick={handleRequestAccess}
+                    >
+                      🔒 Demander l'accès aux anciennes versions
+                    </Button>
+                  )}
+                    </p>
+                  )}
+
+                 
+
 
                   <Button variant="info" onClick={handleSummarize} disabled={isSummarizing}>
                     {isSummarizing ? "Résumé en cours..." : "🧠 Résumer ce document"}
