@@ -48,6 +48,13 @@ const Doc = () => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [existingWorkflow, setExistingWorkflow] = useState(null);
+  const [formData, setFormData] = useState({
+    documentName: '',
+    category: '',
+    file: null,
+    accessType: 'private',
+    users: [],
+  });
 
   const token = localStorage.getItem('token');
   const [isSaving, setIsSaving] = useState(false);
@@ -130,7 +137,6 @@ const Doc = () => {
   };
 
   const handleUpload = async () => {
-
     if (!pendingFile || !pendingName) {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
@@ -139,9 +145,8 @@ const Doc = () => {
     const existingDoc = documents.find(d => d.name === pendingName);
   
     if (existingDoc && !forceUpload) {
-      // Affiche une modale ou demande confirmation personnalisée
       setConflictingDocName(pendingName);
-      setShowConflictPrompt(true); // Cette modale doit avoir un bouton "Oui" → uploadNewVersion
+      setShowConflictPrompt(true);
       return;
     }
 
@@ -150,16 +155,9 @@ const Doc = () => {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('name', pendingName);
-    formData.append('file', pendingFile);
-
-  
-    // Cas standard : upload d’un nouveau document
     await uploadNewDocument();
   };
   
-  // 🔽 Nouvelle fonction pour l’upload d’un nouveau document
   const uploadNewDocument = async () => {
     const formData = new FormData();
     formData.append('name', pendingName);
@@ -170,9 +168,7 @@ const Doc = () => {
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
 
-
     if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
-
       formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
   
@@ -208,27 +204,15 @@ const Doc = () => {
     }
   };
 
-
-  const saveCollection = async () => {
-    const nameToUse = selectedExistingCollection || collectionName;
-    if (!nameToUse) {
-      setErrorMessage('Veuillez choisir ou entrer un nom de collection.');
-      return;
-    }
-
-  
-  // 🔽 Fonction appelée quand l'utilisateur clique sur "Oui" dans la modale
   const uploadNewVersion = async (documentId) => {
     const formData = new FormData();
     formData.append('file', pendingFile);
     formData.append('documentId', documentId);
-    formData.append('category', category);
     formData.append('collectionName', collectionName);
     formData.append('description', description);
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
   
-
     try {
       const res = await fetch(`http://localhost:5000/api/documents/${documentId}/versions`, {
         method: 'POST',
@@ -240,58 +224,60 @@ const Doc = () => {
       if (!res.ok) throw new Error(result.error || "Erreur inconnue");
   
       alert("Nouvelle version ajoutée !");
-      // Optionnel : recharge la liste des documents
       setForceUpload(false);
       setShowConflictPrompt(false);
       resetForm();
     } catch (err) {
       console.error('Erreur sauvegarde collection:', err);
       setErrorMessage('Erreur lors de la sauvegarde des documents.');
-
       setErrorMessage(err.message || 'Erreur lors de l\'ajout de la version.');
-
     }
   };
   
-  // 🔽 Réinitialisation des champs (à appeler après succès)
   const resetForm = () => {
     setPendingFile(null);
     setPendingName('');
-    setCategory('');
     setCollectionName('');
     setErrorMessage(null);
     setConflictingDocName('');
   };
-  
-// Étape 1 : Garder seulement la dernière version pour chaque nom de document
-const latestVersionsMap = new Map();
 
-documents.forEach(doc => {
-  const existing = latestVersionsMap.get(doc.name);
-  if (!existing || doc.version > existing.version) {
-    latestVersionsMap.set(doc.name, doc);
-  }
-});
+  const saveCollection = async () => {
+    const nameToUse = selectedExistingCollection || collectionName;
+    if (!nameToUse) {
+      setErrorMessage('Veuillez choisir ou entrer un nom de collection.');
+      return;
+    }
+    // Implémentation à compléter
+  };
 
-const latestDocuments = Array.from(latestVersionsMap.values());
+  // Étape 1 : Garder seulement la dernière version pour chaque nom de document
+  const latestVersionsMap = new Map();
 
-// Étape 2 : Appliquer les filtres existants sur ces derniers documents
-const filteredDocuments = latestDocuments.filter(doc => {
-  const docName = doc.name || '';
-  const docDate = doc.date ? new Date(doc.date) : null;
-  const docContent = doc.text_content || '';
+  documents.forEach(doc => {
+    const existing = latestVersionsMap.get(doc.name);
+    if (!existing || doc.version > existing.version) {
+      latestVersionsMap.set(doc.name, doc);
+    }
+  });
 
-  const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
-  const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
+  const latestDocuments = Array.from(latestVersionsMap.values());
 
-  const matchesSearch = useAdvancedFilter
-    ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
-    : docName.toLowerCase().includes(searchQuery.toLowerCase());
+  // Étape 2 : Appliquer les filtres existants sur ces derniers documents
+  const filteredDocuments = latestDocuments.filter(doc => {
+    const docName = doc.name || '';
+    const docDate = doc.date ? new Date(doc.date) : null;
+    const docContent = doc.text_content || '';
 
-  return matchesType && matchesDate && matchesSearch;
-});
+    const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
+    const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
 
+    const matchesSearch = useAdvancedFilter
+      ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
+      : docName.toLowerCase().includes(searchQuery.toLowerCase());
 
+    return matchesType && matchesDate && matchesSearch;
+  });
 
   const handleOpenConfirm = async (doc) => {
     setModalDoc(doc);
@@ -309,28 +295,16 @@ const filteredDocuments = latestDocuments.filter(doc => {
     } catch (err) {
       console.error('Erreur vérification workflow:', err);
       
-      // Affichez un message plus clair à l'utilisateur
       if (err.response?.status === 500) {
         toast.error("Erreur serveur lors de la vérification des workflows");
       } else {
         toast.error("Erreur de connexion");
       }
       
-      // Ouvrez quand même le modal avec un état d'erreur
       setExistingWorkflow(null);
       setShowConfirmModal(true);
     }
   };
-
-
-  const [showUploadForm, setShowUploadForm] = useState(false);
-  const [formData, setFormData] = useState({
-    documentName: '',
-    category: '',
-    file: null,
-    accessType: 'private',
-    users: [],
-  });
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -346,11 +320,8 @@ const filteredDocuments = latestDocuments.filter(doc => {
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Form data:', formData);
-    // Tu pourras envoyer les données à l'API ici
   };
 
-
-  // Confirme et crée
   const handleConfirmCreate = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -377,26 +348,24 @@ const filteredDocuments = latestDocuments.filter(doc => {
     }
   };
 
- 
-
-const checkWorkflowExists = async () => {
-  const token = localStorage.getItem('token');
-  try {
-    const res = await axios.get(
-      `http://localhost:5000/api/workflows/document/${modalDoc.id}`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    if (res.data.exists) {
-      setExistingWorkflow(res.data.workflow); // ← contient le workflow trouvé
-    } else {
-      setExistingWorkflow(null);
+  const checkWorkflowExists = async () => {
+    const token = localStorage.getItem('token');
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/workflows/document/${modalDoc.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data.exists) {
+        setExistingWorkflow(res.data.workflow);
+      } else {
+        setExistingWorkflow(null);
+      }
+      setShowConfirmModal(true);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de la vérification du workflow");
     }
-    setShowConfirmModal(true); // ouvrir le modal après le check
-  } catch (err) {
-    console.error(err);
-    toast.error("Erreur lors de la vérification du workflow");
-  }
-};
+  };
 
   return (
     <>
@@ -416,8 +385,6 @@ const checkWorkflowExists = async () => {
             {useAdvancedFilter ? 'Désactiver Avancé' : 'Recherche Avancée'}
           </Button></Col>
         </Row>
-
-
 
         <Container className="mt-5 d-flex justify-content-center">
           <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
@@ -579,7 +546,6 @@ const checkWorkflowExists = async () => {
                     </button>
                   </div>
                 )}
-
               </Card.Body>
 
               <Table striped bordered hover responsive>
@@ -607,18 +573,6 @@ const checkWorkflowExists = async () => {
                         >
                           📄
                         </button>
-                      </td>
-                      <td>{doc.name} <button
-                        onClick={() => {
-                          setSelectedDoc(doc);  // Facultatif, si tu veux toujours garder ça
-                          navigate(`/docvoir/${doc.id}`); // redirection vers DocVoir avec l’ID du doc
-                          setShowModal(false);
-                        }}
-                        className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
-                        style={{ all: 'unset', cursor: 'pointer' }}
-                      >
-                        📄
-                      </button>
                       </td>
                       <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                       <td>{doc.category || 'Non spécifiée'}</td>
@@ -736,57 +690,56 @@ const checkWorkflowExists = async () => {
             <Modal.Title>Créer un nouveau workflow ?</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-  {existingWorkflow ? (
-    <div className="text-center">
-      <Alert variant="warning">
-        Un workflow existe déjà pour ce document !
-      </Alert>
-      <p><strong>Nom:</strong> {existingWorkflow.name}</p>
-      <p><strong>Statut:</strong> {existingWorkflow.status}</p>
-      <Button 
-        variant="primary" 
-        onClick={() => {
-          setShowConfirmModal(false);
-          navigate(`/workflowz/${existingWorkflow.id}`);
-        }}
-      >
-        Voir le workflow existant
-      </Button>
-    </div>
-  ) : (
-    <>
-      <p>Vous êtes sur le point de créer le workflow pour le document :</p>
-      <strong>{modalDoc?.name}</strong>
-      <hr />
-      <Form.Group>
-        <Form.Label>Nom du workflow</Form.Label>
-        <Form.Control
-          type="text"
-          value={autoWfName}
-          onChange={e => setAutoWfName(e.target.value)}
-        />
-      </Form.Group>
-    </>
-  )}
-</Modal.Body>
+            {existingWorkflow ? (
+              <div className="text-center">
+                <Alert variant="warning">
+                  Un workflow existe déjà pour ce document !
+                </Alert>
+                <p><strong>Nom:</strong> {existingWorkflow.name}</p>
+                <p><strong>Statut:</strong> {existingWorkflow.status}</p>
+                <Button 
+                  variant="primary" 
+                  onClick={() => {
+                    setShowConfirmModal(false);
+                    navigate(`/workflowz/${existingWorkflow.id}`);
+                  }}
+                >
+                  Voir le workflow existant
+                </Button>
+              </div>
+            ) : (
+              <>
+                <p>Vous êtes sur le point de créer le workflow pour le document :</p>
+                <strong>{modalDoc?.name}</strong>
+                <hr />
+                <Form.Group>
+                  <Form.Label>Nom du workflow</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={autoWfName}
+                    onChange={e => setAutoWfName(e.target.value)}
+                  />
+                </Form.Group>
+              </>
+            )}
+          </Modal.Body>
 
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>
               Annuler
             </Button>
             <Button 
-  variant="primary" 
-  onClick={handleConfirmCreate}
-  disabled={!!existingWorkflow}  // désactive si un existe
->
-  Créer
-</Button>
-
+              variant="primary" 
+              onClick={handleConfirmCreate}
+              disabled={!!existingWorkflow}
+            >
+              Créer
+            </Button>
           </Modal.Footer>
         </Modal>
       </div>
     </>
   );
 };
-}
+
 export default Doc;

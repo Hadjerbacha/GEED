@@ -6,7 +6,7 @@ import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import 'react-toastify/dist/ReactToastify.css';
-import shareIcon from './share.png';
+import shareIcon from './img/share.png';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
 import { FaCloudUploadAlt, FaFolder, FaFolderOpen } from 'react-icons/fa';
