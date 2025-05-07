@@ -8,12 +8,12 @@ const { analyzeWorkflowWithGemini } = require('./gimini');
 const { getWorkflowFromDB } = require('./service');
 // ➕ Ajouter un workflow
 router.post('/', async (req, res) => {
-  const { name, description, echeance, status, priorite, created_by } = req.body;
+  const { name, description, echeance, status, priorite, created_by, documentId } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO workflow (name, description, echeance, status, priorite, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, description, echeance, status, priorite, created_by]
+      `INSERT INTO workflow (name, description, echeance, status, priorite, created_by, document_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [name, description, echeance, status, priorite, created_by, documentId]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -342,4 +342,151 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
       });
     }
   });
+
+  // Route pour mettre à jour le statut d'un workflow
+router.patch('/:id/status', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  // Validation du statut
+  const allowedStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ 
+      error: 'Statut invalide', 
+      allowedStatuses: allowedStatuses 
+    });
+  }
+
+  try {
+    // 1. Mettre à jour le statut du workflow
+    const result = await pool.query(
+      `UPDATE workflow 
+       SET status = $1, updated_at = NOW() 
+       WHERE id = $2 
+       RETURNING *`,
+      [status, id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Workflow non trouvé' });
+    }
+
+    const updatedWorkflow = result.rows[0];
+
+    // 2. Enregistrer l'action dans les logs
+    const user = req.user; // Récupéré depuis authMiddleware
+    const message = `Statut du workflow mis à jour à "${status}" par ${user.name} ${user.prenom}`;
+    await logWorkflowAction(id, message);
+
+    res.json({ 
+      success: true,
+      workflow: updatedWorkflow,
+      message: 'Statut mis à jour avec succès'
+    });
+
+  } catch (err) {
+    console.error('Erreur lors de la mise à jour du statut:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la mise à jour du statut',
+      details: err.message 
+    });
+  }
+});
+
+router.get('/document/:documentId', authMiddleware, async (req, res) => {
+  const { documentId } = req.params;
+  
+  // Validation simple
+  if (!documentId || isNaN(documentId)) {
+    return res.status(400).json({ message: 'ID de document invalide' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM workflow WHERE document_id = $1 LIMIT 1', // Note: 'workflows' au pluriel?
+      [documentId]
+    );
+    
+    if (result.rows.length > 0) {
+      res.json({ 
+        exists: true, 
+        workflow: result.rows[0] 
+      });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch (err) {
+    console.error('Erreur DB:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur',
+      error: err.message // Ajoutez ceci pour le débogage
+    });
+  }
+});
+
+// GET /api/workflows/:id/tasks - Récupère toutes les tâches d'un workflow spécifique
+router.get('/:id/tasks', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // 1. Vérifier que le workflow existe
+    const workflowRes = await pool.query(
+      'SELECT id FROM workflow WHERE id = $1', 
+      [id]
+    );
+    
+    if (workflowRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Workflow non trouvé' });
+    }
+
+    // 2. Récupérer les tâches avec les informations des utilisateurs assignés
+    const tasksRes = await pool.query(
+      `SELECT 
+        t.id,
+        t.title,
+        t.description,
+        t.due_date,
+        t.priority,
+        t.status,
+        t.file_path,
+        t.assigned_to,
+        t.created_at,
+        t.assignment_note,
+        jsonb_agg(
+          jsonb_build_object(
+            'id', u.id,
+            'name', u.name,
+            'prenom', u.prenom,
+            'email', u.email
+          )
+        ) FILTER (WHERE u.id IS NOT NULL) as assigned_users
+       FROM tasks t
+       LEFT JOIN unnest(t.assigned_to) WITH ORDINALITY AS a(user_id, ord) ON true
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE t.workflow_id = $1
+       GROUP BY t.id
+       ORDER BY 
+         CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,
+         t.due_date ASC,
+         t.id ASC`,
+      [id]
+    );
+
+    // 3. Formater la réponse
+    const tasks = tasksRes.rows.map(task => ({
+      ...task,
+      due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
+      assigned_users: task.assigned_users || []
+    }));
+
+    res.json(tasks);
+    
+  } catch (err) {
+    console.error('Erreur dans GET /api/workflows/:id/tasks:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération des tâches',
+      details: err.message 
+    });
+  }
+});
 module.exports = router;

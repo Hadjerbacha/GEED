@@ -39,10 +39,14 @@ const upload = multer({
 });
 
 // Fonction de classification des documents (par exemple, CV ou Facture)
+
+
 function classifyText(text) {
   const lower = text.toLowerCase();
   if (lower.includes('facture') || lower.includes('bon') || lower.includes('montant')) return 'facture';
   if (lower.includes('curriculum vitae') || lower.includes('cv') || lower.includes('expérience')) return 'cv';
+  if (lower.includes('contrat') || lower.includes('accord')) return 'contrat';
+  if (lower.includes('rapport') || lower.includes('analyse')) return 'rapport';
   return 'autre';
 }
 
@@ -154,7 +158,7 @@ router.get('/', auth, async (req, res) => {
 
 // upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name, access, allowedUsers, category } = req.body;  // <-- On récupère la catégorie depuis le formulaire
+  const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -181,10 +185,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     }
 
     // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
-    let finalCategory = category;
-    if (!finalCategory || finalCategory.trim() === '') {
-      finalCategory = classifyText(extractedText);  // Classifier le texte pour une catégorie automatique
-    }
+    let finalCategory = classifyText(extractedText); 
 
     // Insertion du document dans la base de données
     const insertDocQuery = `

@@ -22,36 +22,36 @@ const Doc = () => {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [useAdvancedFilter, setUseAdvancedFilter] = useState(false);
-  const [category, setCategory] = useState('');
   const [collectionName, setCollectionName] = useState('');
   const [collections, setCollections] = useState([]);
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [selectedExistingCollection, setSelectedExistingCollection] = useState('');
   const [selectedVersion, setSelectedVersion] = useState(null);
-
   const [users, setUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [description, setDescription] = useState('');
-
   const [showConflictPrompt, setShowConflictPrompt] = useState(false);
   const [conflictingDocName, setConflictingDocName] = useState('');
   const [forceUpload, setForceUpload] = useState(false);
   const [tags, setTags] = useState([]);
   const [priority, setPriority] = useState('');
   const [accessType, setAccessType] = useState('private');
-
-  //modal
   const [showShareModal, setShowShareModal] = useState(false);
   const [docToShare, setDocToShare] = useState(null);
   const [shareAccessType, setShareAccessType] = useState('private');
   const [shareUsers, setShareUsers] = useState([]);
-
-
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [modalDoc, setModalDoc] = useState(null);
+  const [autoWfName, setAutoWfName] = useState('');
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [allowedUsers, setAllowedUsers] = useState([]);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [existingWorkflow, setExistingWorkflow] = useState(null);
 
   const token = localStorage.getItem('token');
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
-
   const [userId, setUserId] = useState(null);
 
   useEffect(() => {
@@ -61,23 +61,17 @@ const Doc = () => {
         const { id } = jwtDecode(token);
         setUserId(id);
       } catch (e) {
-        console.error('Token invalide :', e);
+        console.error('Token invalide:', e);
       }
     }
   }, []);
 
-  //fonction MODAL
   const openShareModal = (doc) => {
     setDocToShare(doc);
     setShareAccessType(doc.access || 'private');
     setShareUsers(doc.allowedUsers || []);
     setShowShareModal(true);
   };
-
-
-
-
-
 
   const fetchDocuments = async () => {
     try {
@@ -91,12 +85,12 @@ const Doc = () => {
         const names = data.map(doc => doc.collectionName).filter(name => name && typeof name === 'string');
         setCollections([...new Set(names)]);
       } else {
-        console.error('Données invalides :', data);
+        console.error('Données invalides:', data);
         setDocuments([]);
         setCollections([]);
       }
     } catch (err) {
-      console.error('Erreur chargement documents :', err);
+      console.error('Erreur chargement documents:', err);
       setErrorMessage("Erreur d'autorisation ou de connexion.");
     }
   };
@@ -106,22 +100,16 @@ const Doc = () => {
     fetchUsers();
   }, [token]);
 
-
   const fetchUsers = async () => {
     try {
       const res = await axios.get('http://localhost:5000/api/auth/users/');
       const formatted = res.data.map(u => ({ value: u.id, label: `${u.name} ${u.prenom}` }));
       setUsers(formatted);
+      setAllUsers(formatted);
     } catch (err) {
       console.error('Erreur chargement des utilisateurs', err);
     }
   };
-
-
-  // Consultation
-  const [selectedDoc, setSelectedDoc] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
 
   const consultDocument = url => {
     window.open(`http://localhost:5000${url}`, '_blank');
@@ -137,33 +125,16 @@ const Doc = () => {
       setDocuments(docs => docs.filter(d => d.id !== id));
       setSavedDocuments(docs => docs.filter(d => d.id !== id));
     } catch (err) {
-      console.error('Erreur suppression :', err);
+      console.error('Erreur suppression:', err);
     }
   };
 
-
-  // Déclaration de la liste des utilisateurs autorisés
-  const [allowedUsers, setAllowedUsers] = useState([]);
-
-  // Exemple de fonction pour ajouter un utilisateur à la liste
-  const handleAddUser = (user) => {
-    setAllowedUsers([...allowedUsers, user]);
-  };
-
-  // Exemple de fonction pour supprimer un utilisateur de la liste
-  const handleRemoveUser = (user) => {
-    setAllowedUsers(allowedUsers.filter(u => u !== user));
-  };
-
-  //Upload
   const handleUpload = async () => {
-    // Validation des champs requis
-    if (!pendingFile || !pendingName || !category) {
+    if (!pendingFile || !pendingName) {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
 
-    // Vérification des documents existants
     const existingDoc = documents.find(d => d.name === pendingName);
     if (existingDoc && !forceUpload) {
       setConflictingDocName(pendingName);
@@ -171,25 +142,20 @@ const Doc = () => {
       return;
     }
 
-    // Vérification de la taille du fichier (limite de 10 Mo)
     if (pendingFile.size > 10 * 1024 * 1024) {
       setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
       return;
     }
 
-    // Création du FormData pour l'envoi
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
-    formData.append('category', category);
-    formData.append('access', accessType); // <-- ici : champ "access" attendu côté serveur
+    formData.append('access', accessType);
     formData.append('collectionName', collectionName);
     formData.append('description', description);
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
 
-
-    // Si l'accès est personnalisé, ajouter les utilisateurs autorisés
     if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
       formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
@@ -198,35 +164,33 @@ const Doc = () => {
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`, // Pas de Content-Type, sinon FormData est cassé
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       });
 
       if (!res.ok) {
         const errorData = await res.json();
-        throw new Error(errorData.error || `Erreur : ${res.status}`);
+        throw new Error(errorData.error || `Erreur: ${res.status}`);
       }
 
       const newDoc = await res.json();
       setDocuments([newDoc, ...documents]);
 
-      // Réinitialisation des champs après l'upload
       setPendingFile(null);
       setPendingName('');
-      setCategory('');
       setCollectionName('');
       setForceUpload(false);
       setShowConflictPrompt(false);
       setConflictingDocName('');
       setErrorMessage(null);
+      setShowUploadForm(false);
 
     } catch (err) {
       console.error('Erreur lors de l\'upload du document:', err);
       setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
     }
   };
-
 
   const saveCollection = async () => {
     const nameToUse = selectedExistingCollection || collectionName;
@@ -252,7 +216,7 @@ const Doc = () => {
       setIsSavingCollection(false);
       if (!collections.includes(nameToUse)) setCollections([...collections, nameToUse]);
     } catch (err) {
-      console.error('Erreur sauvegarde collection :', err);
+      console.error('Erreur sauvegarde collection:', err);
       setErrorMessage('Erreur lors de la sauvegarde des documents.');
     }
   };
@@ -267,50 +231,37 @@ const Doc = () => {
     return matchesType && matchesDate && (matchesSearch || matchesAdvanced);
   });
 
-
-  // En haut de ton composant Doc.js
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
-  const [modalDoc, setModalDoc] = useState(null);
-  const [autoWfName, setAutoWfName] = useState('');
-
-  // Quand tu cliques sur le bouton, ouvre le modal
-  const handleOpenConfirm = (doc) => {
+  const handleOpenConfirm = async (doc) => {
     setModalDoc(doc);
-    setAutoWfName(`WF_${doc.name}`);   // nom généré automatiquement
-    setShowConfirmModal(true);
+    setAutoWfName(`WF_${doc.name}`);
+    
+    try {
+      const res = await axios.get(
+        `http://localhost:5000/api/workflows/document/${doc.id}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setExistingWorkflow(res.data.exists ? res.data.workflow : null);
+      setShowConfirmModal(true);
+      
+    } catch (err) {
+      console.error('Erreur vérification workflow:', err);
+      
+      // Affichez un message plus clair à l'utilisateur
+      if (err.response?.status === 500) {
+        toast.error("Erreur serveur lors de la vérification des workflows");
+      } else {
+        toast.error("Erreur de connexion");
+      }
+      
+      // Ouvrez quand même le modal avec un état d'erreur
+      setExistingWorkflow(null);
+      setShowConfirmModal(true);
+    }
   };
-
-  const [showUploadForm, setShowUploadForm] = useState(false);
-  const [formData, setFormData] = useState({
-    documentName: '',
-    category: '',
-    file: null,
-    accessType: 'private',
-    users: [],
-  });
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileChange = (e) => {
-    setFormData((prev) => ({ ...prev, file: e.target.files[0] }));
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    console.log('Form data:', formData);
-    // Tu pourras envoyer les données à l'API ici
-  };
-
-
-  // Confirme et crée
   const handleConfirmCreate = async () => {
     try {
       const token = localStorage.getItem('token');
-
-      // Générer la date du jour au format YYYY-MM-DD
       const todayISO = new Date().toISOString().slice(0, 10);
 
       const res = await axios.post(
@@ -321,7 +272,7 @@ const Doc = () => {
           status: 'pending',
           template: modalDoc.category,
           created_by: userId,
-          echeance: todayISO   // ← on transmet la date de création ici
+          echeance: todayISO
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -334,36 +285,55 @@ const Doc = () => {
     }
   };
 
+ 
 
-
-
+const checkWorkflowExists = async () => {
+  const token = localStorage.getItem('token');
+  try {
+    const res = await axios.get(
+      `http://localhost:5000/api/workflows/document/${modalDoc.id}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (res.data.exists) {
+      setExistingWorkflow(res.data.workflow); // ← contient le workflow trouvé
+    } else {
+      setExistingWorkflow(null);
+    }
+    setShowConfirmModal(true); // ouvrir le modal après le check
+  } catch (err) {
+    console.error(err);
+    toast.error("Erreur lors de la vérification du workflow");
+  }
+};
 
   return (
     <>
-
       <Navbar />
       <div className="container-fluid">
-
         <Row className="my-3">
           <Col md={4}><Form.Control type="text" placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></Col>
-          <Col md={2}><Form.Select value={filterType} onChange={e => setFilterType(e.target.value)}><option value="Tous les documents">Tous</option><option value=".pdf">PDF</option><option value=".docx">Word</option><option value=".jpg">Images</option></Form.Select></Col>
+          <Col md={2}><Form.Select value={filterType} onChange={e => setFilterType(e.target.value)}>
+            <option value="Tous les documents">Tous</option>
+            <option value=".pdf">PDF</option>
+            <option value=".docx">Word</option>
+            <option value=".jpg">Images</option>
+          </Form.Select></Col>
           <Col md={2}><Form.Control type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></Col>
           <Col md={2}><Form.Control type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></Col>
-          <Col md={2}><Button variant={useAdvancedFilter ? 'danger' : 'success'} onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}>{useAdvancedFilter ? 'Désactiver Avancé' : 'Recherche Avancée'}</Button></Col>
+          <Col md={2}><Button variant={useAdvancedFilter ? 'danger' : 'success'} onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}>
+            {useAdvancedFilter ? 'Désactiver Avancé' : 'Recherche Avancée'}
+          </Button></Col>
         </Row>
 
         {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
-
-
 
         <Container className="mt-5 d-flex justify-content-center">
           <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
             <Card.Body>
               <h3 className="text-center mb-4">📂 Liste des documents</h3>
 
-              {/* Bouton Annuler / Télécharger */}
               <Button
-                variant={showUploadForm ? "danger" : "primary"} // Le bouton devient rouge quand on veut annuler
+                variant={showUploadForm ? "danger" : "primary"}
                 onClick={() => setShowUploadForm(!showUploadForm)}
                 className="mb-4"
                 style={{ marginBottom: "1rem" }}
@@ -372,12 +342,9 @@ const Doc = () => {
               </Button>
 
               <Card.Body>
-
-                {/* Formulaire d'upload avec une Card pour les champs */}
                 {showUploadForm && (
                   <Card className="mb-4 p-4">
                     <Row className="mb-3">
-                      {/* Champ Nom du Document */}
                       <Col md={3} className="mb-3">
                         <Form.Control
                           type="text"
@@ -388,18 +355,17 @@ const Doc = () => {
                         />
                       </Col>
 
-                      {/* Champ Upload avec Icône */}
                       <Col md={3} className="mb-3 d-flex justify-content-between align-items-center">
                         <input
                           type="file"
                           id="file-upload"
-                          style={{ display: 'none' }} // Masquer l'input file
+                          style={{ display: 'none' }}
                           accept=".pdf,.docx,.jpg,.jpeg,.png"
-                          onChange={handleFileChange}
+                          onChange={(e) => setPendingFile(e.target.files[0])}
                         />
                         <Button
                           variant="outline-primary"
-                          onClick={() => document.getElementById('file-upload').click()} // Déclenche le click de l'input file
+                          onClick={() => document.getElementById('file-upload').click()}
                           className="d-flex align-items-center rounded-3 px-4"
                         >
                           <FaCloudUploadAlt size={20} className="me-2" />
@@ -407,22 +373,6 @@ const Doc = () => {
                         </Button>
                       </Col>
 
-                      {/* Sélecteur de Catégorie */}
-                      <Col md={2} className="mb-3">
-                        <Form.Select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value)}
-                          className="rounded-3"
-                        >
-                          <option value="">Catégorie</option>
-                          <option value="rapport">Rapport</option>
-                          <option value="article">Article</option>
-                          <option value="mémoire">Mémoire</option>
-                          <option value="autre">Autre</option>
-                        </Form.Select>
-                      </Col>
-
-                      {/* Sélecteur d'Accès */}
                       <Col md={2} className="mb-3">
                         <Form.Select
                           value={accessType}
@@ -435,20 +385,23 @@ const Doc = () => {
                         </Form.Select>
                       </Col>
 
-                      {/* Liste des utilisateurs autorisés si custom */}
                       {accessType === 'custom' && (
                         <Col md={3} className="mb-3">
-                          <Form.Control
-                            type="text"
-                            placeholder="Utilisateurs autorisés"
-                            value={allowedUsers.join(', ')}
-                            onChange={(e) => setAllowedUsers(e.target.value.split(','))}
-                            className="rounded-3"
+                          <Select
+                            isMulti
+                            options={allUsers}
+                            value={allUsers.filter(option => allowedUsers.includes(option.value))}
+                            onChange={(selectedOptions) => {
+                              const selectedUserIds = selectedOptions.map(opt => opt.value);
+                              setAllowedUsers(selectedUserIds);
+                            }}
+                            placeholder="Sélectionner des utilisateurs..."
+                            className="basic-multi-select"
+                            classNamePrefix="select"
                           />
                         </Col>
                       )}
 
-                      {/* Champ Description */}
                       <Col md={3} className="mb-3">
                         <Form.Control
                           type="text"
@@ -459,7 +412,6 @@ const Doc = () => {
                         />
                       </Col>
 
-                      {/* Sélecteur de Priorité */}
                       <Col md={2} className="mb-3">
                         <Form.Select
                           value={priority}
@@ -473,18 +425,16 @@ const Doc = () => {
                         </Form.Select>
                       </Col>
 
-                      {/* Champ de Tags */}
                       <Col md={3} className="mb-3">
                         <Form.Control
                           type="text"
-                          placeholder="Mots clés"
+                          placeholder="Mots clés (séparés par des virgules)"
                           value={tags.join(', ')}
-                          onChange={(e) => setTags(e.target.value.split(','))}
+                          onChange={(e) => setTags(e.target.value.split(',').map(tag => tag.trim()))}
                           className="rounded-3"
                         />
                       </Col>
 
-                      {/* Bouton d'upload */}
                       <Col md={2} className="mb-3 d-flex justify-content-center align-items-center">
                         <OverlayTrigger
                           placement="top"
@@ -493,23 +443,18 @@ const Doc = () => {
                               <Tooltip id="tooltip-disabled">
                                 Veuillez sélectionner au moins un utilisateur.
                               </Tooltip>
-                            ) : (
-                              <></>
-                            )
+                            ) : <span></span>
                           }
                         >
-                          <Button
-                            onClick={handleUpload}
-                            disabled={accessType === 'custom' && allowedUsers.length === 0}
-                            className="rounded-3"
-                            style={
-                              accessType === 'custom' && allowedUsers.length === 0
-                                ? { pointerEvents: 'none' }
-                                : {}
-                            }
-                          >
-                            Uploader
-                          </Button>
+                          <div>
+                            <Button
+                              onClick={handleUpload}
+                              disabled={accessType === 'custom' && allowedUsers.length === 0}
+                              className="rounded-3"
+                            >
+                              Uploader
+                            </Button>
+                          </div>
                         </OverlayTrigger>
                       </Col>
                     </Row>
@@ -529,17 +474,19 @@ const Doc = () => {
                 <tbody>
                   {filteredDocuments.length > 0 ? filteredDocuments.map(doc => (
                     <tr key={doc.id}>
-                      <td>{doc.name} {doc.version && `(version ${doc.version})`}<button
-                        onClick={() => {
-                          setSelectedDoc(doc);  // Facultatif, si tu veux toujours garder ça
-                          navigate(`/docvoir/${doc.id}`); // redirection vers DocVoir avec l’ID du doc
-                          setShowModal(false);
-                        }}
-                        className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
-                        style={{ all: 'unset', cursor: 'pointer' }}
-                      >
-                        📄
-                      </button>
+                      <td>
+                        {doc.name} {doc.version && `(version ${doc.version})`}
+                        <button
+                          onClick={() => {
+                            setSelectedDoc(doc);
+                            navigate(`/docvoir/${doc.id}`);
+                            setShowModal(false);
+                          }}
+                          className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                          style={{ all: 'unset', cursor: 'pointer' }}
+                        >
+                          📄
+                        </button>
                       </td>
                       <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                       <td>{doc.category || 'Non spécifiée'}</td>
@@ -552,10 +499,8 @@ const Doc = () => {
                           <i className="bi bi-trash"></i>
                         </Button>
 
-                        {/* Bouton de partage */}
                         <Button variant="light" onClick={() => openShareModal(doc)}>
                           <img src={shareIcon} width="20" alt="Partager" />
-
                         </Button>
                         <Button
                           variant="dark"
@@ -566,21 +511,17 @@ const Doc = () => {
                         >
                           <i className="bi bi-play-fill me-1"></i>
                         </Button>
-
-
-
                       </td>
-
                     </tr>
                   )) : (
                     <tr><td colSpan="4" className="text-center">Aucun document trouvé</td></tr>
                   )}
-
                 </tbody>
               </Table>
             </Card.Body>
           </Card>
         </Container>
+
         <Modal
           show={showShareModal}
           onHide={() => setShowShareModal(false)}
@@ -588,7 +529,6 @@ const Doc = () => {
           keyboard={false}
           centered
           style={{ zIndex: 1050 }}
-          backdropClassName="custom-backdrop"
         >
           <Modal.Header closeButton>
             <Modal.Title>Partager le document : {docToShare?.name}</Modal.Title>
@@ -612,14 +552,14 @@ const Doc = () => {
                   <Select
                     isMulti
                     options={users}
-                    value={users.filter(option =>
-                      shareUsers.includes(option.value)
-                    )}
+                    value={users.filter(option => shareUsers.includes(option.value))}
                     onChange={(selectedOptions) => {
                       const selectedUserIds = selectedOptions.map((opt) => opt.value);
                       setShareUsers(selectedUserIds);
                     }}
                     placeholder="Sélectionner des utilisateurs..."
+                    className="basic-multi-select"
+                    classNamePrefix="select"
                   />
                 </Form.Group>
               )}
@@ -653,6 +593,7 @@ const Doc = () => {
             </Button>
           </Modal.Footer>
         </Modal>
+
         <Modal
           show={showConfirmModal}
           onHide={() => setShowConfirmModal(false)}
@@ -663,37 +604,56 @@ const Doc = () => {
             <Modal.Title>Créer un nouveau workflow ?</Modal.Title>
           </Modal.Header>
           <Modal.Body>
-            <p>Vous êtes sur le point de créer le workflow pour le document :</p>
-            <strong>{modalDoc?.name}</strong>
-            <hr />
-            <Form.Group>
-              <Form.Label>Nom du workflow</Form.Label>
-              <Form.Control
-                type="text"
-                value={autoWfName}
-                onChange={e => setAutoWfName(e.target.value)}
-              />
-              <Form.Text className="text-muted">
-                Vous pouvez modifier ce nom si besoin.
-              </Form.Text>
-            </Form.Group>
-          </Modal.Body>
+  {existingWorkflow ? (
+    <div className="text-center">
+      <Alert variant="warning">
+        Un workflow existe déjà pour ce document !
+      </Alert>
+      <p><strong>Nom:</strong> {existingWorkflow.name}</p>
+      <p><strong>Statut:</strong> {existingWorkflow.status}</p>
+      <Button 
+        variant="primary" 
+        onClick={() => {
+          setShowConfirmModal(false);
+          navigate(`/workflowz/${existingWorkflow.id}`);
+        }}
+      >
+        Voir le workflow existant
+      </Button>
+    </div>
+  ) : (
+    <>
+      <p>Vous êtes sur le point de créer le workflow pour le document :</p>
+      <strong>{modalDoc?.name}</strong>
+      <hr />
+      <Form.Group>
+        <Form.Label>Nom du workflow</Form.Label>
+        <Form.Control
+          type="text"
+          value={autoWfName}
+          onChange={e => setAutoWfName(e.target.value)}
+        />
+      </Form.Group>
+    </>
+  )}
+</Modal.Body>
+
           <Modal.Footer>
             <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>
               Annuler
             </Button>
-            <Button variant="primary" onClick={handleConfirmCreate}>
-              Créer
-            </Button>
+            <Button 
+  variant="primary" 
+  onClick={handleConfirmCreate}
+  disabled={!!existingWorkflow}  // désactive si un existe
+>
+  Créer
+</Button>
+
           </Modal.Footer>
         </Modal>
-
-
-
       </div>
-
     </>
-
   );
 };
 

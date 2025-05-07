@@ -37,7 +37,7 @@ function App() {
         <Routes>
           {/* Route non protégée */}
           <Route path="/" element={<Login />} />
-          <Route path="/test" element={<Test />} />
+          <Route path="/test/:id" element={<Test />} />
           <Route path="/test2" element={<Test2 />} />
           <Route path="/test3" element={<Test3 />} />
           <Route path="/test4" element={<Test4 />} />
