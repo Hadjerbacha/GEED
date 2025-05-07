@@ -492,6 +492,94 @@ router.post('/', async (req, res) => {
   }
 });
 
+const ensureDocumentVersionsTable = async () => {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS document_versions (
+      id SERIAL PRIMARY KEY,
+      document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      file_path TEXT NOT NULL,
+      text_content TEXT,
+      ocr_text TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  console.log("✅ Table 'document_versions' vérifiée ou créée.");
+};
+
+// Appelle-le au démarrage du serveur
+ensureDocumentVersionsTable().catch(console.error);
+
+//version
+router.post('/', upload.single('file'), async (req, res) => {
+  const {
+    name,
+    category,
+    description,
+    access,
+    collectionName,
+    priority,
+    tags,
+    allowedUsers
+  } = req.body;
+
+  const ownerId = req.user.id;
+  const filePath = req.file.path;
+
+  try {
+    // Vérifie si un document de ce nom existe déjà
+    const existingDoc = await pool.query(
+      'SELECT * FROM documents WHERE name = $1 AND owner_id = $2',
+      [name, ownerId]
+    );
+
+    let documentId;
+
+    if (existingDoc.rows.length > 0) {
+      // Document existe => ajouter une nouvelle version
+      documentId = existingDoc.rows[0].id;
+
+      // Récupérer le dernier numéro de version
+      const latestVersion = await pool.query(
+        'SELECT MAX(version_number) as max FROM document_versions WHERE document_id = $1',
+        [documentId]
+      );
+      const nextVersion = (latestVersion.rows[0].max || 0) + 1;
+
+      // Enregistre la nouvelle version
+      await pool.query(
+        `INSERT INTO document_versions (document_id, version_number, file_path, text_content, ocr_text)
+         VALUES ($1, $2, $3, '', '')`,
+        [documentId, nextVersion, filePath]
+      );
+
+      return res.status(200).json({ message: 'Nouvelle version ajoutée', version: nextVersion });
+    } else {
+      // Nouveau document
+      const newDoc = await pool.query(
+        `INSERT INTO documents (name, file_path, category, description, collection_name, owner_id, visibility)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [name, filePath, category, description, collectionName, ownerId, access]
+      );
+      documentId = newDoc.rows[0].id;
+
+      // Version initiale
+      await pool.query(
+        `INSERT INTO document_versions (document_id, version_number, file_path, text_content, ocr_text)
+         VALUES ($1, 1, $2, '', '')`,
+        [documentId, filePath]
+      );
+
+      return res.status(201).json({ message: 'Document créé avec version initiale' });
+    }
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur lors de l\'upload' });
+  }
+});
+
+
 
 // Initialisation des tables
 initializeDatabase();

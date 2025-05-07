@@ -6,7 +6,7 @@ import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import 'react-toastify/dist/ReactToastify.css';
-import shareIcon from './share.png';
+import shareIcon from './img/share.png';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
 import { FaCloudUploadAlt } from 'react-icons/fa';
@@ -157,60 +157,50 @@ const Doc = () => {
 
   //Upload
   const handleUpload = async () => {
-    // Validation des champs requis
     if (!pendingFile || !pendingName || !category) {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
-
-    // Vérification des documents existants
+  
     const existingDoc = documents.find(d => d.name === pendingName);
     if (existingDoc && !forceUpload) {
-      setConflictingDocName(pendingName);
-      setShowConflictPrompt(true);
+      if (window.confirm("Ce document existe déjà. Voulez-vous ajouter une nouvelle version ?")) {
+        setForceUpload(true);
+        // On rappelle la fonction pour poursuivre
+        handleUpload();
+      } else {
+        setErrorMessage("Veuillez modifier le nom du document.");
+      }
       return;
     }
-
-    // Vérification de la taille du fichier (limite de 10 Mo)
-    if (pendingFile.size > 10 * 1024 * 1024) {
-      setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
-      return;
-    }
-
-    // Création du FormData pour l'envoi
+  
+    // ... Upload standard
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
     formData.append('category', category);
-    formData.append('access', accessType); // <-- ici : champ "access" attendu côté serveur
+    formData.append('access', accessType);
     formData.append('collectionName', collectionName);
     formData.append('description', description);
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
-
-
-    // Si l'accès est personnalisé, ajouter les utilisateurs autorisés
-    if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
+    if (accessType === 'custom') {
       formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
-
+  
     try {
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`, // Pas de Content-Type, sinon FormData est cassé
-        },
-        body: formData,
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
       });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || `Erreur : ${res.status}`);
-      }
-
-      const newDoc = await res.json();
-      setDocuments([newDoc, ...documents]);
-
+  
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erreur inconnue");
+  
+      alert(result.message);
+      setDocuments([result, ...documents]);
+      
       // Réinitialisation des champs après l'upload
       setPendingFile(null);
       setPendingName('');
@@ -295,9 +285,11 @@ const Doc = () => {
   };
 
   const handleFileChange = (e) => {
-    setFormData((prev) => ({ ...prev, file: e.target.files[0] }));
+    if (e.target.files && e.target.files.length > 0) {
+      setPendingFile(e.target.files[0]);
+    }
   };
-
+  
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Form data:', formData);
@@ -352,7 +344,7 @@ const Doc = () => {
           <Col md={2}><Button variant={useAdvancedFilter ? 'danger' : 'success'} onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}>{useAdvancedFilter ? 'Désactiver Avancé' : 'Recherche Avancée'}</Button></Col>
         </Row>
 
-        {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
+        
 
 
 
@@ -370,6 +362,7 @@ const Doc = () => {
               >
                 {showUploadForm ? 'Annuler' : 'Télécharger un document'}
               </Button>
+              {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
               <Card.Body>
 
