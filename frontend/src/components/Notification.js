@@ -8,6 +8,8 @@ const NotificationsPage = () => {
   const [reminders, setReminders] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [userId, setUserId] = useState("");
+  const [userRole, setUserRole] = useState("");
+
 
   // Décoder le token pour récupérer userId
   useEffect(() => {
@@ -25,6 +27,16 @@ const NotificationsPage = () => {
       fetchReminders();
     }
   }, [userId]);
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const decoded = jwtDecode(token);
+      setUserId(decoded.id);
+      setUserRole(decoded.role); // Assure-toi que le role est bien encodé dans ton token
+    }
+  }, []);
+  
 
   const fetchNotifications = async () => {
     try {
@@ -86,10 +98,45 @@ const NotificationsPage = () => {
     <div className="container-fluid g-0">
       <Navbar />
 
+
+
       {/* Notifications Système */}
       <h4 className="my-4 p-3 bg-light border-start border-4 border-primary rounded m-4">
         🔔 Notifications Système
       </h4>
+
+      {notifications
+  .filter(notif => notif.type === 'version_request') // Montre uniquement les demandes d'anciennes versions
+  .filter(() => userRole !== 'admin') // Cache pour les admins
+  .map(notif => (
+    <Card key={notif.id} className="m-4">
+      <Card.Body>
+        <div className="d-flex justify-content-between align-items-center">
+          <div>
+            <Card.Title>📂 Demande d’ancienne version</Card.Title>
+            <Card.Text className="text-muted" style={{ fontSize: '0.9rem' }}>
+              {notif.message}
+            </Card.Text>
+            <small className="text-muted">
+              Reçu le : {new Date(notif.created_at).toLocaleString()}
+            </small>
+          </div>
+          <div className="d-flex flex-column align-items-end">
+            {!notif.is_read && (
+              <Button 
+                variant="outline-success" 
+                size="sm"
+                onClick={() => markAsRead(notif.id)}
+              >
+                Marquer comme lu
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card.Body>
+    </Card>
+))}
+
 
       {notifications.length === 0 ? (
         <div className="alert alert-info text-center m-4" role="alert">

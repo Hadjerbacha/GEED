@@ -18,6 +18,9 @@ const DocumentDetails = () => {
   const [users, setUsers] = useState([]);
   const [userId, setUserId] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [showVersions, setShowVersions] = useState(false);
+  const [oldVersions, setOldVersions] = useState([]);
+
 
 
   useEffect(() => {
@@ -182,6 +185,21 @@ const DocumentDetails = () => {
     }
   }, [userId, users]);
 
+  const fetchOldVersions = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('http://localhost:5000/api/document_versions', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setOldVersions(res.data);
+    } catch (error) {
+      console.error('Erreur lors de la récupération des anciennes versions:', error);
+    }
+  };
+  const handleViewVersions = () => {
+    navigate(`/document/${document.id}/versions`);
+  };
+
 
   console.log("Liste des utilisateurs:", users);
   console.log("userId:", userId, "typeof:", typeof userId);
@@ -226,18 +244,20 @@ const DocumentDetails = () => {
                     <p className="mt-4">
                       <strong>ℹ️ Version actuelle :</strong> {document.version}
                       {document.version > 1 && currentUser?.role !== 'admin' && (
-                    <Button
-                      variant="warning"
-                      className="mt-2"
-                      onClick={handleRequestAccess}
-                    >
-                      🔒 Demander l'accès aux anciennes versions
-                    </Button>
-                  )}
+                        <Button
+                          variant="warning"
+                          className="mt-2"
+                          onClick={handleRequestAccess}
+                        >
+                          🔒 Demander l'accès aux anciennes versions
+                        </Button>
+                      )}
+                      <button onClick={handleViewVersions}>Voir les versions</button>
+
                     </p>
                   )}
 
-                 
+
 
 
                   <Button variant="info" onClick={handleSummarize} disabled={isSummarizing}>
