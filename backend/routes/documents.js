@@ -122,7 +122,6 @@ async function initializeDatabase() {
   }
 }
 
-
 // GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
   const userId = req.user.id; // récupéré depuis le token
@@ -149,12 +148,9 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
-
-
-
 // upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name, access, allowedUsers, category } = req.body;  // <-- On récupère la catégorie depuis le formulaire
+  const { name, access, allowedUsers, category } = req.body;
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -167,55 +163,73 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
 
-    // Traitement OCR ou extraction de texte selon le type de fichier
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
-      extractedText = data.text;  // Extraction de texte pour les fichiers PDF
+      extractedText = data.text;
     } else if (mimeType?.startsWith('image/')) {
-      // Extraction de texte pour les images avec OCR
-      const result = await Tesseract.recognize(fullPath, 'eng'); // 'eng' pour l'anglais, adapte selon la langue
+      const result = await Tesseract.recognize(fullPath, 'eng');
       extractedText = result.data.text;
     } else {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
     }
 
-    // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
-    let finalCategory = category;
-    if (!finalCategory || finalCategory.trim() === '') {
-      finalCategory = classifyText(extractedText);  // Classifier le texte pour une catégorie automatique
+    extractedText = extractedText.replace(/\u0000/g, '');
+    const finalCategory = category?.trim() || classifyText(extractedText);
+
+    const existing = await pool.query(
+      'SELECT * FROM documents WHERE name = $1 ORDER BY version DESC LIMIT 1',
+      [name]
+    );
+
+    let version = 1;
+    let original_id = null;
+    let result;
+
+    if (existing.rowCount > 0) {
+      const latestDoc = existing.rows[0];
+      version = parseInt(latestDoc.version, 10) + 1; // ✅ Correction concaténation
+      original_id = latestDoc.original_id || latestDoc.id;
     }
 
-    // Insertion du document dans la base de données
-    const insertDocQuery = `
-      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    // ➕ Nouvelle version = nouvelle ligne dans `documents`
+    const insertQuery = `
+      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text, version, original_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
-    const docValues = [name, file_path, finalCategory, extractedText, req.user.id, access, extractedText];
-    const result = await pool.query(insertDocQuery, docValues);
+    const insertValues = [
+      name,
+      file_path,
+      finalCategory,
+      extractedText,
+      req.user.id,
+      access,
+      extractedText,
+      version,
+      original_id
+    ];
+
+    result = await pool.query(insertQuery, insertValues);
     const documentId = result.rows[0].id;
 
-    // 🔐 Gestion des permissions
+    // 🔐 Gestion des permissions (uniquement à l'insertion)
     if (access === 'public') {
       const allUsers = await pool.query('SELECT id FROM users');
-      const insertPromises = allUsers.rows.map(user =>
+      await Promise.all(allUsers.rows.map(user =>
         pool.query(
           'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
           [user.id, documentId, 'public']
         )
-      );
-      await Promise.all(insertPromises);
+      ));
     } else if (access === 'custom' && Array.isArray(allowedUsers)) {
-      const insertPromises = allowedUsers.map(userId =>
+      await Promise.all(allowedUsers.map(userId =>
         pool.query(
           'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
           [userId, documentId, 'custom']
         )
-      );
-      await Promise.all(insertPromises);
+      ));
     } else {
-      // Accès privé à l'utilisateur propriétaire
       await pool.query(
         'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
         [req.user.id, documentId, 'read']
@@ -224,16 +238,18 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     res.status(201).json({
       ...result.rows[0],
-      preview: extractedText.slice(0, 300) + '...',  // Prévisualisation du texte extrait
-      permissions: access
+      preview: extractedText.slice(0, 300) + '...',
+      permissions: access,
+      message: version > 1 ? 'Nouvelle version enregistrée avec succès' : 'Document ajouté avec succès'
     });
 
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => { });  // Supprimer le fichier en cas d'erreur
+    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
+
 
 
 
@@ -489,93 +505,6 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error("Erreur OpenAI:", error.response?.data || error.message);
     res.status(500).json({ error: "Erreur lors de la génération du résumé." });
-  }
-});
-
-const ensureDocumentVersionsTable = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS document_versions (
-      id SERIAL PRIMARY KEY,
-      document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
-      version_number INTEGER NOT NULL,
-      file_path TEXT NOT NULL,
-      text_content TEXT,
-      ocr_text TEXT,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    );
-  `);
-  console.log("✅ Table 'document_versions' vérifiée ou créée.");
-};
-
-// Appelle-le au démarrage du serveur
-ensureDocumentVersionsTable().catch(console.error);
-
-//version
-router.post('/', upload.single('file'), async (req, res) => {
-  const {
-    name,
-    category,
-    description,
-    access,
-    collectionName,
-    priority,
-    tags,
-    allowedUsers
-  } = req.body;
-
-  const ownerId = req.user.id;
-  const filePath = req.file.path;
-
-  try {
-    // Vérifie si un document de ce nom existe déjà
-    const existingDoc = await pool.query(
-      'SELECT * FROM documents WHERE name = $1 AND owner_id = $2',
-      [name, ownerId]
-    );
-
-    let documentId;
-
-    if (existingDoc.rows.length > 0) {
-      // Document existe => ajouter une nouvelle version
-      documentId = existingDoc.rows[0].id;
-
-      // Récupérer le dernier numéro de version
-      const latestVersion = await pool.query(
-        'SELECT MAX(version_number) as max FROM document_versions WHERE document_id = $1',
-        [documentId]
-      );
-      const nextVersion = (latestVersion.rows[0].max || 0) + 1;
-
-      // Enregistre la nouvelle version
-      await pool.query(
-        `INSERT INTO document_versions (document_id, version_number, file_path, text_content, ocr_text)
-         VALUES ($1, $2, $3, '', '')`,
-        [documentId, nextVersion, filePath]
-      );
-
-      return res.status(200).json({ message: 'Nouvelle version ajoutée', version: nextVersion });
-    } else {
-      // Nouveau document
-      const newDoc = await pool.query(
-        `INSERT INTO documents (name, file_path, category, description, collection_name, owner_id, visibility)
-         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [name, filePath, category, description, collectionName, ownerId, access]
-      );
-      documentId = newDoc.rows[0].id;
-
-      // Version initiale
-      await pool.query(
-        `INSERT INTO document_versions (document_id, version_number, file_path, text_content, ocr_text)
-         VALUES ($1, 1, $2, '', '')`,
-        [documentId, filePath]
-      );
-
-      return res.status(201).json({ message: 'Document créé avec version initiale' });
-    }
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Erreur serveur lors de l\'upload' });
   }
 });
 

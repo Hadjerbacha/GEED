@@ -74,11 +74,6 @@ const Doc = () => {
     setShowShareModal(true);
   };
 
-
-
-
-
-
   const fetchDocuments = async () => {
     try {
       const res = await fetch('http://localhost:5000/api/documents/', {
@@ -163,18 +158,20 @@ const Doc = () => {
     }
   
     const existingDoc = documents.find(d => d.name === pendingName);
+  
     if (existingDoc && !forceUpload) {
-      if (window.confirm("Ce document existe déjà. Voulez-vous ajouter une nouvelle version ?")) {
-        setForceUpload(true);
-        // On rappelle la fonction pour poursuivre
-        handleUpload();
-      } else {
-        setErrorMessage("Veuillez modifier le nom du document.");
-      }
+      // Affiche une modale ou demande confirmation personnalisée
+      setConflictingDocName(pendingName);
+      setShowConflictPrompt(true); // Cette modale doit avoir un bouton "Oui" → uploadNewVersion
       return;
     }
   
-    // ... Upload standard
+    // Cas standard : upload d’un nouveau document
+    await uploadNewDocument();
+  };
+  
+  // 🔽 Nouvelle fonction pour l’upload d’un nouveau document
+  const uploadNewDocument = async () => {
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
@@ -200,52 +197,54 @@ const Doc = () => {
   
       alert(result.message);
       setDocuments([result, ...documents]);
-      
-      // Réinitialisation des champs après l'upload
-      setPendingFile(null);
-      setPendingName('');
-      setCategory('');
-      setCollectionName('');
-      setForceUpload(false);
-      setShowConflictPrompt(false);
-      setConflictingDocName('');
-      setErrorMessage(null);
-
+      resetForm();
     } catch (err) {
       console.error('Erreur lors de l\'upload du document:', err);
       setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
     }
   };
-
-
-  const saveCollection = async () => {
-    const nameToUse = selectedExistingCollection || collectionName;
-    if (!nameToUse) {
-      setErrorMessage('Veuillez choisir ou entrer un nom de collection.');
-      return;
-    }
+  
+  // 🔽 Fonction appelée quand l'utilisateur clique sur "Oui" dans la modale
+  const uploadNewVersion = async (documentId) => {
+    const formData = new FormData();
+    formData.append('file', pendingFile);
+    formData.append('documentId', documentId);
+    formData.append('category', category);
+    formData.append('collectionName', collectionName);
+    formData.append('description', description);
+    formData.append('priority', priority);
+    formData.append('tags', JSON.stringify(tags));
+  
     try {
-      const updated = await Promise.all(
-        savedDocuments.map(async doc => {
-          const res = await axios.put(
-            `http://localhost:5000/api/documents/${doc.id}`,
-            { collectionName: nameToUse },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          return res.data;
-        })
-      );
-      setDocuments(prev => prev.map(d => updated.find(u => u.id === d.id) || d));
-      setSavedDocuments([]);
-      setCollectionName('');
-      setSelectedExistingCollection('');
-      setIsSavingCollection(false);
-      if (!collections.includes(nameToUse)) setCollections([...collections, nameToUse]);
+      const res = await fetch(`http://localhost:5000/api/documents/${documentId}/versions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+  
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erreur inconnue");
+  
+      alert("Nouvelle version ajoutée !");
+      // Optionnel : recharge la liste des documents
+      setForceUpload(false);
+      setShowConflictPrompt(false);
+      resetForm();
     } catch (err) {
-      console.error('Erreur sauvegarde collection :', err);
-      setErrorMessage('Erreur lors de la sauvegarde des documents.');
+      setErrorMessage(err.message || 'Erreur lors de l\'ajout de la version.');
     }
   };
+  
+  // 🔽 Réinitialisation des champs (à appeler après succès)
+  const resetForm = () => {
+    setPendingFile(null);
+    setPendingName('');
+    setCategory('');
+    setCollectionName('');
+    setErrorMessage(null);
+    setConflictingDocName('');
+  };
+  
 
   const filteredDocuments = documents.filter(doc => {
     const docName = doc.name || '';
@@ -289,7 +288,7 @@ const Doc = () => {
       setPendingFile(e.target.files[0]);
     }
   };
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     console.log('Form data:', formData);
@@ -344,7 +343,7 @@ const Doc = () => {
           <Col md={2}><Button variant={useAdvancedFilter ? 'danger' : 'success'} onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}>{useAdvancedFilter ? 'Désactiver Avancé' : 'Recherche Avancée'}</Button></Col>
         </Row>
 
-        
+
 
 
 
@@ -508,6 +507,33 @@ const Doc = () => {
                     </Row>
                   </Card>
                 )}
+                {showConflictPrompt && (
+                  <div className="conflict-dialog">
+                    <p>
+                      Un fichier avec le nom <strong>{conflictingDocName}</strong> existe déjà.<br />
+                      Voulez-vous sauvegarder une nouvelle version du document ?
+                    </p>
+                    <button
+                      className="button-oui"
+                      onClick={() => {
+                        setForceUpload(true);
+                        handleUpload();
+                      }}
+                    >
+                      Oui
+                    </button>
+                    <button
+                      className="button-non"
+                      onClick={() => {
+                        setShowConflictPrompt(false);
+                        setForceUpload(false);
+                      }}
+                    >
+                      Non
+                    </button>
+                  </div>
+                )}
+
               </Card.Body>
 
               <Table striped bordered hover responsive>
