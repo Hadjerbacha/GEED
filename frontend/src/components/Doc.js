@@ -6,7 +6,7 @@ import Navbar from './Navbar';
 import { useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 import 'react-toastify/dist/ReactToastify.css';
-import shareIcon from './share.png';
+import shareIcon from './img/share.png';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
 import { FaCloudUploadAlt } from 'react-icons/fa';
@@ -130,15 +130,18 @@ const Doc = () => {
   };
 
   const handleUpload = async () => {
+
     if (!pendingFile || !pendingName) {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
 
     const existingDoc = documents.find(d => d.name === pendingName);
+  
     if (existingDoc && !forceUpload) {
+      // Affiche une modale ou demande confirmation personnalisée
       setConflictingDocName(pendingName);
-      setShowConflictPrompt(true);
+      setShowConflictPrompt(true); // Cette modale doit avoir un bouton "Oui" → uploadNewVersion
       return;
     }
 
@@ -150,16 +153,29 @@ const Doc = () => {
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
+
+  
+    // Cas standard : upload d’un nouveau document
+    await uploadNewDocument();
+  };
+  
+  // 🔽 Nouvelle fonction pour l’upload d’un nouveau document
+  const uploadNewDocument = async () => {
+    const formData = new FormData();
+    formData.append('name', pendingName);
+    formData.append('file', pendingFile);
     formData.append('access', accessType);
     formData.append('collectionName', collectionName);
     formData.append('description', description);
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
 
+
     if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
+
       formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
-
+  
     try {
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
@@ -192,44 +208,90 @@ const Doc = () => {
     }
   };
 
+
   const saveCollection = async () => {
     const nameToUse = selectedExistingCollection || collectionName;
     if (!nameToUse) {
       setErrorMessage('Veuillez choisir ou entrer un nom de collection.');
       return;
     }
+
+  
+  // 🔽 Fonction appelée quand l'utilisateur clique sur "Oui" dans la modale
+  const uploadNewVersion = async (documentId) => {
+    const formData = new FormData();
+    formData.append('file', pendingFile);
+    formData.append('documentId', documentId);
+    formData.append('category', category);
+    formData.append('collectionName', collectionName);
+    formData.append('description', description);
+    formData.append('priority', priority);
+    formData.append('tags', JSON.stringify(tags));
+  
+
     try {
-      const updated = await Promise.all(
-        savedDocuments.map(async doc => {
-          const res = await axios.put(
-            `http://localhost:5000/api/documents/${doc.id}`,
-            { collectionName: nameToUse },
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          return res.data;
-        })
-      );
-      setDocuments(prev => prev.map(d => updated.find(u => u.id === d.id) || d));
-      setSavedDocuments([]);
-      setCollectionName('');
-      setSelectedExistingCollection('');
-      setIsSavingCollection(false);
-      if (!collections.includes(nameToUse)) setCollections([...collections, nameToUse]);
+      const res = await fetch(`http://localhost:5000/api/documents/${documentId}/versions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      });
+  
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Erreur inconnue");
+  
+      alert("Nouvelle version ajoutée !");
+      // Optionnel : recharge la liste des documents
+      setForceUpload(false);
+      setShowConflictPrompt(false);
+      resetForm();
     } catch (err) {
       console.error('Erreur sauvegarde collection:', err);
       setErrorMessage('Erreur lors de la sauvegarde des documents.');
+
+      setErrorMessage(err.message || 'Erreur lors de l\'ajout de la version.');
+
     }
   };
+  
+  // 🔽 Réinitialisation des champs (à appeler après succès)
+  const resetForm = () => {
+    setPendingFile(null);
+    setPendingName('');
+    setCategory('');
+    setCollectionName('');
+    setErrorMessage(null);
+    setConflictingDocName('');
+  };
+  
+// Étape 1 : Garder seulement la dernière version pour chaque nom de document
+const latestVersionsMap = new Map();
 
-  const filteredDocuments = documents.filter(doc => {
-    const docName = doc.name || '';
-    const docDate = doc.date ? new Date(doc.date) : null;
-    const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
-    const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
-    const matchesSearch = docName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesAdvanced = useAdvancedFilter && (doc.text_content || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesDate && (matchesSearch || matchesAdvanced);
-  });
+documents.forEach(doc => {
+  const existing = latestVersionsMap.get(doc.name);
+  if (!existing || doc.version > existing.version) {
+    latestVersionsMap.set(doc.name, doc);
+  }
+});
+
+const latestDocuments = Array.from(latestVersionsMap.values());
+
+// Étape 2 : Appliquer les filtres existants sur ces derniers documents
+const filteredDocuments = latestDocuments.filter(doc => {
+  const docName = doc.name || '';
+  const docDate = doc.date ? new Date(doc.date) : null;
+  const docContent = doc.text_content || '';
+
+  const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
+  const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
+
+  const matchesSearch = useAdvancedFilter
+    ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
+    : docName.toLowerCase().includes(searchQuery.toLowerCase());
+
+  return matchesType && matchesDate && matchesSearch;
+});
+
+
 
   const handleOpenConfirm = async (doc) => {
     setModalDoc(doc);
@@ -259,6 +321,36 @@ const Doc = () => {
       setShowConfirmModal(true);
     }
   };
+
+
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [formData, setFormData] = useState({
+    documentName: '',
+    category: '',
+    file: null,
+    accessType: 'private',
+    users: [],
+  });
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setPendingFile(e.target.files[0]);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    console.log('Form data:', formData);
+    // Tu pourras envoyer les données à l'API ici
+  };
+
+
+  // Confirme et crée
   const handleConfirmCreate = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -325,7 +417,7 @@ const checkWorkflowExists = async () => {
           </Button></Col>
         </Row>
 
-        {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
+
 
         <Container className="mt-5 d-flex justify-content-center">
           <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
@@ -340,6 +432,7 @@ const checkWorkflowExists = async () => {
               >
                 {showUploadForm ? 'Annuler' : 'Télécharger un document'}
               </Button>
+              {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
               <Card.Body>
                 {showUploadForm && (
@@ -460,6 +553,33 @@ const checkWorkflowExists = async () => {
                     </Row>
                   </Card>
                 )}
+                {showConflictPrompt && (
+                  <div className="conflict-dialog">
+                    <p>
+                      Un fichier avec le nom <strong>{conflictingDocName}</strong> existe déjà.<br />
+                      Voulez-vous sauvegarder une nouvelle version du document ?
+                    </p>
+                    <button
+                      className="button-oui"
+                      onClick={() => {
+                        setForceUpload(true);
+                        handleUpload();
+                      }}
+                    >
+                      Oui
+                    </button>
+                    <button
+                      className="button-non"
+                      onClick={() => {
+                        setShowConflictPrompt(false);
+                        setForceUpload(false);
+                      }}
+                    >
+                      Non
+                    </button>
+                  </div>
+                )}
+
               </Card.Body>
 
               <Table striped bordered hover responsive>
@@ -487,6 +607,18 @@ const checkWorkflowExists = async () => {
                         >
                           📄
                         </button>
+                      </td>
+                      <td>{doc.name} <button
+                        onClick={() => {
+                          setSelectedDoc(doc);  // Facultatif, si tu veux toujours garder ça
+                          navigate(`/docvoir/${doc.id}`); // redirection vers DocVoir avec l’ID du doc
+                          setShowModal(false);
+                        }}
+                        className="p-0 m-0 bg-transparent border-none outline-none hover:opacity-70"
+                        style={{ all: 'unset', cursor: 'pointer' }}
+                      >
+                        📄
+                      </button>
                       </td>
                       <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                       <td>{doc.category || 'Non spécifiée'}</td>
@@ -656,5 +788,5 @@ const checkWorkflowExists = async () => {
     </>
   );
 };
-
+}
 export default Doc;

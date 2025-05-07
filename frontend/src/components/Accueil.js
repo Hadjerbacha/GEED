@@ -5,6 +5,14 @@ import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
 import "bootstrap/dist/css/bootstrap.min.css";
 import './Dashboard.css'; // Fichier pour les styles personnalisés
+import docImage from './img/doc.jpg';
+import workflowImage from './img/workflow.png';
+import notifImage from './img/notif.jpg';
+import todoImage from './img/todo.jpg';
+
+
+
+
 
 const Accueil = () => {
   const [recentDocuments, setRecentDocuments] = useState([]);
@@ -71,16 +79,16 @@ const Accueil = () => {
 
     // Récupérer les notifications
     // Récupérer les notifications
-axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`, config)
-.then(res => {
-  // Ajouter les notifications dans l'état avec les nouveaux attributs
-  const formattedNotifications = res.data.slice(0, 5).map(notification => ({
-    ...notification,
-    message: notification.message,
-  }));
-  setNotifications(formattedNotifications);
-})
-.catch(err => console.error("Erreur notifications :", err));
+    axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`, config)
+      .then(res => {
+        // Ajouter les notifications dans l'état avec les nouveaux attributs
+        const formattedNotifications = res.data.slice(0, 5).map(notification => ({
+          ...notification,
+          message: notification.message,
+        }));
+        setNotifications(formattedNotifications);
+      })
+      .catch(err => console.error("Erreur notifications :", err));
 
   }, [currentUser, token]);
 
@@ -89,11 +97,36 @@ axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`, config)
       <Navbar />
       <div className="container-fluid py-4">
         <div className="row g-4">
-          <Card title="Documents Récents" items={recentDocuments} onClick={() => navigate("/documents")} type="doc" />
-          <Card title="Workflows en Retard" items={lateWorkflows} onClick={() => navigate("/workflows")} type="workflow" />
-          <Card title="Tâches Assignées à Vous" items={assignedTasks} onClick={() => navigate("/mes-taches")} type="task" />
+          <Card
+            title="Documents Récents"
+            items={recentDocuments}
+            onClick={() => navigate("/documents")}
+            type="doc"
+            image={docImage}
+          />
+
+          <Card
+            title="Workflows en Retard"
+            items={lateWorkflows}
+            onClick={() => navigate("/workflows")}
+            type="workflow"
+            image={workflowImage}
+          />
+          <Card
+            title="Tâches Assignées à Vous"
+            items={assignedTasks}
+            onClick={() => navigate("/mes-taches")}
+            type="task"
+            image={todoImage}
+          />
           {/* Carte pour afficher les notifications */}
-          <Card title="Notifications" items={notifications} onClick={() => navigate("/notif")} type="notification" />
+          <Card
+            title="Notifications"
+            items={notifications}
+            onClick={() => navigate("/notif")}
+            type="notification"
+            image={notifImage}
+          />
         </div>
       </div>
     </>
@@ -101,24 +134,43 @@ axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`, config)
 };
 
 // Composant Card générique pour l'affichage des éléments
-const Card = ({ title, items, onClick, type }) => (
+const Card = ({ title, items, onClick, type, image }) => (
   <div className="col-md-6">
-    <div className="custom-card" onClick={onClick}>
-      <div className="custom-card-header">{title}</div>
-      <div className="card-body">
-        {items?.length > 0 ? items.map(item => (
-          <div key={item.id} className="mb-2">
-            <strong>{item.name || item.title}</strong> <small>{item.due_date || item.date ? new Date(item.due_date || item.date).toLocaleDateString() : ''}</small>
-            {item.message && (
-              <div>
-                <p><strong>-</strong> {item.message}</p>
-              </div>
-            )}
-          </div>
-        )) : <p className="text-muted">Aucun élément</p>}
+    <div className="custom-card p-3" onClick={onClick} style={{ cursor: 'pointer' }}>
+      <div className="custom-card-header mb-2">{title}</div>
+      <div className="d-flex align-items-start">
+        <div className="flex-grow-1">
+          {items?.length > 0 ? items.map(item => (
+            <div key={item.id} className="mb-2">
+              <strong>{item.name || item.title}</strong>
+              <small className="d-block text-muted">
+                {item.due_date || item.date ? new Date(item.due_date || item.date).toLocaleDateString() : ''}
+              </small>
+              {item.message && (
+                <p className="mb-0"><strong>-</strong> {item.message}</p>
+              )}
+            </div>
+          )) : <p className="text-muted">Aucun élément</p>}
+        </div>
+
+        {image && (
+          <img
+            src={image}
+            alt="Illustration"
+            className="ms-3"
+            style={{
+              width: "150px",
+              height: "150px",
+              objectFit: "cover",
+              borderRadius: "8px",
+              flexShrink: 0
+            }}
+          />
+        )}
       </div>
     </div>
   </div>
 );
+
 
 export default Accueil;

@@ -126,7 +126,6 @@ async function initializeDatabase() {
   }
 }
 
-
 // GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
   const userId = req.user.id; // récupéré depuis le token
@@ -153,9 +152,6 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
-
-
-
 // upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
   const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
@@ -171,14 +167,12 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
 
-    // Traitement OCR ou extraction de texte selon le type de fichier
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
-      extractedText = data.text;  // Extraction de texte pour les fichiers PDF
+      extractedText = data.text;
     } else if (mimeType?.startsWith('image/')) {
-      // Extraction de texte pour les images avec OCR
-      const result = await Tesseract.recognize(fullPath, 'eng'); // 'eng' pour l'anglais, adapte selon la langue
+      const result = await Tesseract.recognize(fullPath, 'eng');
       extractedText = result.data.text;
     } else {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
@@ -187,36 +181,60 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
     let finalCategory = classifyText(extractedText); 
 
-    // Insertion du document dans la base de données
-    const insertDocQuery = `
-      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    const existing = await pool.query(
+      'SELECT * FROM documents WHERE name = $1 ORDER BY version DESC LIMIT 1',
+      [name]
+    );
+
+    let version = 1;
+    let original_id = null;
+    let result;
+
+    if (existing.rowCount > 0) {
+      const latestDoc = existing.rows[0];
+      version = parseInt(latestDoc.version, 10) + 1; // ✅ Correction concaténation
+      original_id = latestDoc.original_id || latestDoc.id;
+    }
+
+
+    // ➕ Nouvelle version = nouvelle ligne dans `documents`
+    const insertQuery = `
+      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text, version, original_id)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *;
     `;
-    const docValues = [name, file_path, finalCategory, extractedText, req.user.id, access, extractedText];
-    const result = await pool.query(insertDocQuery, docValues);
+    const insertValues = [
+      name,
+      file_path,
+      finalCategory,
+      extractedText,
+      req.user.id,
+      access,
+      extractedText,
+      version,
+      original_id
+    ];
+
+    result = await pool.query(insertQuery, insertValues);
     const documentId = result.rows[0].id;
 
-    // 🔐 Gestion des permissions
+    // 🔐 Gestion des permissions (uniquement à l'insertion)
     if (access === 'public') {
       const allUsers = await pool.query('SELECT id FROM users');
-      const insertPromises = allUsers.rows.map(user =>
+      await Promise.all(allUsers.rows.map(user =>
         pool.query(
           'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
           [user.id, documentId, 'public']
         )
-      );
-      await Promise.all(insertPromises);
+      ));
     } else if (access === 'custom' && Array.isArray(allowedUsers)) {
-      const insertPromises = allowedUsers.map(userId =>
+      await Promise.all(allowedUsers.map(userId =>
         pool.query(
           'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
           [userId, documentId, 'custom']
         )
-      );
-      await Promise.all(insertPromises);
+      ));
     } else {
-      // Accès privé à l'utilisateur propriétaire
       await pool.query(
         'INSERT INTO document_permissions (user_id, document_id, access_type) VALUES ($1, $2, $3)',
         [req.user.id, documentId, 'read']
@@ -225,16 +243,18 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     res.status(201).json({
       ...result.rows[0],
-      preview: extractedText.slice(0, 300) + '...',  // Prévisualisation du texte extrait
-      permissions: access
+      preview: extractedText.slice(0, 300) + '...',
+      permissions: access,
+      message: version > 1 ? 'Nouvelle version enregistrée avec succès' : 'Document ajouté avec succès'
     });
 
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => { });  // Supprimer le fichier en cas d'erreur
+    if (req.file) fs.unlink(req.file.path, () => {});
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
+
 
 
 
@@ -492,6 +512,7 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: "Erreur lors de la génération du résumé." });
   }
 });
+
 
 
 // Initialisation des tables
