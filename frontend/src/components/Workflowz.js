@@ -352,6 +352,7 @@ export default function WorkflowPage() {
   const [showDiagram, setShowDiagram] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
+  const [hasGeneratedTasks, setHasGeneratedTasks] = useState(false);
   const [tasks, setTasks] = useState([]); // État pour stocker les tâches
   const [taskForm, setTaskForm] = useState({ 
     title: '', 
@@ -369,10 +370,30 @@ export default function WorkflowPage() {
         axios.get(`http://localhost:5000/api/workflows/${id}/logs`, { headers: { Authorization: `Bearer ${token}` } }),
         axios.get(`http://localhost:5000/api/workflows/${id}/tasks`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
-      setWorkflow(wfRes.data.workflow);
+      
+      const tasks = tasksRes.data;
+      const calculatedStatus = determineWorkflowStatus(tasks);
+      
+      // Si le statut a changé, mettez à jour le workflow
+      if (wfRes.data.workflow.status !== calculatedStatus) {
+        await axios.patch(
+          `http://localhost:5000/api/workflows/${id}`,
+          { status: calculatedStatus },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        // Recharger les données après mise à jour
+        const updatedWfRes = await axios.get(
+          `http://localhost:5000/api/workflows/${id}`, 
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setWorkflow(updatedWfRes.data.workflow);
+      } else {
+        setWorkflow(wfRes.data.workflow);
+      }
+      
       setSteps(wfRes.data.steps);
       setLogs(logRes.data);
-      setTasks(tasksRes.data); // Ajoutez cette ligne pour stocker les tâches
+      setTasks(tasks);
     } catch (err) {
       toast.error('Erreur de chargement des données');
     } finally {
@@ -444,6 +465,7 @@ export default function WorkflowPage() {
     }
   };
 
+  
   const generateTasks = async () => {
     try {
       const prompt = `Voici le nom d'un workflow : ${workflow.name} et sa description : ${workflow.description}.\nGénère une liste de tâches au format JSON, chaque tâche doit avoir les champs suivants : title, description et due_date.`;
@@ -453,12 +475,12 @@ export default function WorkflowPage() {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       toast.success('Tâches générées avec succès');
+      setHasGeneratedTasks(true); // Marquer comme généré
       fetchAll();
     } catch {
       toast.error("Erreur lors de la génération des tâches");
     }
   };
-
   const handleEditTask = (task) => {
     setEditingTask(task);
     setTaskForm({
@@ -542,6 +564,33 @@ export default function WorkflowPage() {
     }
   };
 
+  const determineWorkflowStatus = (tasks) => {
+    if (tasks.length === 0) return 'pending'; // Cas par défaut si pas de tâches
+    
+    const hasPending = tasks.some(t => t.status === 'pending' && t.status !== 'failed');
+    const hasInProgress = tasks.some(t => t.status === 'in_progress' && t.status !== 'failed');
+    const allCompleted = tasks.every(t => 
+      t.status === 'completed' || t.status === 'failed' // Ignorer les tâches failed
+    );
+  
+    if (hasPending) return 'pending';
+    if (hasInProgress) return 'in_progress';
+    if (allCompleted) return 'completed';
+    
+    return 'pending'; // Cas par défaut
+  };
+
+  useEffect(() => {
+    if (tasks.length > 0 && workflow) {
+      const newStatus = determineWorkflowStatus(tasks);
+      if (newStatus !== workflow.status) {
+        // Optionnel : vous pouvez choisir de mettre à jour automatiquement
+        // ou laisser la mise à jour se faire au prochain fetchAll
+        console.log(`Le workflow devrait passer à: ${newStatus}`);
+      }
+    }
+  }, [tasks, workflow]);
+  
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center vh-100">
@@ -618,11 +667,31 @@ export default function WorkflowPage() {
             <Card.Header className="d-flex justify-content-between align-items-center">
               <h5 className="mb-0">Tâches du workflow</h5>
               <div className="d-flex gap-2">
-                <OverlayTrigger placement="top" overlay={<Tooltip>Générer automatiquement des tâches</Tooltip>}>
-                  <Button variant="outline-secondary" size="sm" onClick={generateTasks}>
-                    <FiPlus className="me-1" /> Générer
-                  </Button>
-                </OverlayTrigger>
+                <OverlayTrigger 
+  placement="top" 
+  overlay={
+    <Tooltip>
+      {hasGeneratedTasks 
+        ? "Les tâches ont déjà été générées automatiquement" 
+        : "Générer automatiquement des tâches basées sur le workflow"}
+    </Tooltip>
+  }
+>
+  <Button 
+    variant={hasGeneratedTasks ? "outline-secondary" : "outline-primary"} 
+    size="sm" 
+    onClick={generateTasks}
+    disabled={hasGeneratedTasks}
+  >
+    <FiPlus className="me-1" />
+    {hasGeneratedTasks ? (
+      <>
+        <FiCheckCircle className="me-1" />
+        Généré
+      </>
+    ) : "Générer"}
+  </Button>
+</OverlayTrigger>
                 <Button variant="success" size="sm" onClick={openCreateTask}>
                   <FiPlus className="me-1" /> Nouvelle tâche
                 </Button>

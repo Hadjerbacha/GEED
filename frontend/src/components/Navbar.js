@@ -118,7 +118,7 @@ const Navbar = () => {
     },
     {
       title: 'Archive',
-      path: currentUser?.role === 'admin' ? '/archive' : '/archiveUser',
+      path: currentUser?.role === 'admin' ? '/archiveadmin' : '/archive',
       icon: <FaIcons.FaArchive />,
     },
     currentUser?.role === 'admin' && {

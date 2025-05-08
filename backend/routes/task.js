@@ -179,6 +179,66 @@ router.get('/:id/bpmn', async (req, res) => {
   }
 });
 
+// GET /api/workflows/archives - Récupère tous les workflows archivés
+router.get('/archives', authMiddleware, async (req, res) => {
+  try {
+    // Requête pour récupérer les archives avec des statistiques de base
+    const result = await pool.query(`
+      SELECT 
+        wa.*,
+        w.created_at as workflow_created_at,
+        COUNT(t.id) as total_tasks,
+        COUNT(t.id) FILTER (WHERE t.status = 'completed') as completed_tasks,
+        u.name as creator_name,
+        u.prenom as creator_prenom,
+        d.name as document_title
+      FROM 
+        workflow_archive wa
+        LEFT JOIN workflow w ON wa.workflow_id = w.id
+        LEFT JOIN tasks t ON w.id = t.workflow_id
+        LEFT JOIN users u ON wa.created_by = u.id
+        LEFT JOIN documents d ON wa.document_id = d.id
+      GROUP BY 
+        wa.id, w.created_at, u.name, u.prenom, d.name
+      ORDER BY 
+        wa.completed_at DESC
+    `);
+
+    // Formater les données pour le frontend
+    const archives = result.rows.map(archive => ({
+      id: archive.id,
+      workflow_id: archive.workflow_id,
+      document_id: archive.document_id,
+      document_title: archive.document_title,
+      name: archive.name,
+      description: archive.description,
+      created_by: archive.created_by,
+      creator: `${archive.creator_prenom} ${archive.creator_name}`,
+      completed_at: archive.completed_at,
+      validation_report: archive.validation_report,
+      stats: {
+        total_tasks: archive.total_tasks,
+        completed_tasks: archive.completed_tasks,
+        completion_rate: archive.total_tasks > 0 
+          ? Math.round((archive.completed_tasks / archive.total_tasks) * 100) 
+          : 0
+      },
+      workflow_created_at: archive.workflow_created_at,
+      workflow_duration: archive.completed_at 
+        ? Math.ceil((new Date(archive.completed_at) - new Date(archive.workflow_created_at)) / (1000 * 60 * 60 * 24))
+        : null
+    }));
+
+    res.json(archives);
+  } catch (err) {
+    console.error('Erreur lors de la récupération des archives:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération des archives',
+      details: err.message
+    });
+  }
+});
+
 // routes/workflow.js (extrait)
 router.get('/:id', authMiddleware, async (req, res) => {
   const { id } = req.params;
@@ -358,39 +418,43 @@ router.patch('/:id/status', authMiddleware, async (req, res) => {
   }
 
   try {
-    // 1. Mettre à jour le statut du workflow
-    const result = await pool.query(
-      `UPDATE workflow 
-       SET status = $1, updated_at = NOW() 
-       WHERE id = $2 
-       RETURNING *`,
-      [status, id]
-    );
+// Mise à jour du statut
+const result = await pool.query(
+  `UPDATE workflow SET status = $1 WHERE id = $2 RETURNING *`,
+  [status, id]
+);
 
-    if (result.rowCount === 0) {
-      return res.status(404).json({ error: 'Workflow non trouvé' });
-    }
+// Archivage automatique si le workflow est terminé
+if (status === 'completed') {
+  // Générer un rapport automatique
+  const report = `Workflow terminé le ${new Date().toLocaleDateString()}`;
+  
+  await pool.query(
+    `INSERT INTO workflow_archive
+     (workflow_id, name, description, document_id, created_by, completed_at, validation_report)
+     VALUES ($1, $2, $3, $4, $5, NOW(), $6)`,
+    [
+      id,
+      result.rows[0].name,
+      result.rows[0].description,
+      result.rows[0].document_id,
+      req.user.id,
+      report
+    ]
+  );
 
-    const updatedWorkflow = result.rows[0];
+  // Marquer le document comme archivé
+  await pool.query(
+    'UPDATE documents SET is_archived = true WHERE id = $1',
+    [result.rows[0].document_id]
+  );
+}
 
-    // 2. Enregistrer l'action dans les logs
-    const user = req.user; // Récupéré depuis authMiddleware
-    const message = `Statut du workflow mis à jour à "${status}" par ${user.name} ${user.prenom}`;
-    await logWorkflowAction(id, message);
-
-    res.json({ 
-      success: true,
-      workflow: updatedWorkflow,
-      message: 'Statut mis à jour avec succès'
-    });
-
-  } catch (err) {
-    console.error('Erreur lors de la mise à jour du statut:', err);
-    res.status(500).json({ 
-      error: 'Erreur lors de la mise à jour du statut',
-      details: err.message 
-    });
-  }
+res.json(result.rows[0]);
+} catch (err) {
+console.error('Erreur:', err);
+res.status(500).json({ error: 'Erreur serveur' });
+}
 });
 
 router.get('/document/:documentId', authMiddleware, async (req, res) => {
@@ -489,4 +553,117 @@ router.get('/:id/tasks', authMiddleware, async (req, res) => {
     });
   }
 });
+
+// Route PATCH pour mettre à jour partiellement un workflow
+router.patch('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  try {
+    // Vérifier d'abord si le workflow existe
+    const checkRes = await pool.query(
+      'SELECT * FROM workflow WHERE id = $1',
+      [id]
+    );
+    
+    if (checkRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Workflow non trouvé' });
+    }
+
+    // Construire dynamiquement la requête de mise à jour
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    // Liste des champs autorisés à être mis à jour
+    const allowedFields = ['name', 'description', 'echeance', 'status', 'priorite'];
+    
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    // Si aucun champ valide n'a été fourni
+    if (fields.length === 0) {
+      return res.status(400).json({ 
+        error: 'Aucun champ valide fourni pour la mise à jour',
+        allowedFields: allowedFields
+      });
+    }
+
+    // Ajouter la date de mise à jour
+    fields.push(`updated_at = NOW()`);
+
+    // Construire et exécuter la requête finale
+    const queryText = `
+      UPDATE workflow
+      SET ${fields.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+    values.push(id);
+
+    const result = await pool.query(queryText, values);
+    
+    // Enregistrer l'action dans les logs
+    const user = req.user; // Récupéré depuis authMiddleware
+    const message = `Workflow mis à jour par ${user.name} ${user.prenom}`;
+    await logWorkflowAction(id, message);
+
+    res.json({
+      success: true,
+      workflow: result.rows[0],
+      message: 'Workflow mis à jour avec succès'
+    });
+
+  } catch (err) {
+    console.error('Erreur lors de la mise à jour du workflow:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la mise à jour du workflow',
+      details: err.message 
+    });
+  }
+});
+
+// routes/task.js
+router.post('/:id/archive', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { validation_report } = req.body;
+
+  try {
+    // 1. Vérifier que le workflow est terminé
+    const workflowRes = await pool.query(
+      'SELECT * FROM workflow WHERE id = $1 AND status = $2',
+      [id, 'completed']
+    );
+
+    if (workflowRes.rowCount === 0) {
+      return res.status(400).json({ error: 'Le workflow doit être terminé pour être archivé' });
+    }
+
+    // 2. Créer l'archive
+    const archiveRes = await pool.query(
+      `INSERT INTO workflow_archive 
+       (workflow_id, name, description, document_id, created_by, completed_at, validation_report)
+       SELECT id, name, description, document_id, created_by, NOW(), $1
+       FROM workflow WHERE id = $2 RETURNING *`,
+      [validation_report, id]
+    );
+
+    // 3. Marquer le document comme archivé (optionnel)
+    await pool.query(
+      'UPDATE documents SET is_archived = true WHERE id = $1',
+      [workflowRes.rows[0].document_id]
+    );
+
+    res.json(archiveRes.rows[0]);
+  } catch (err) {
+    console.error('Erreur lors de l\'archivage:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'archivage' });
+  }
+});
+
 module.exports = router;
