@@ -13,7 +13,7 @@ import { FaCloudUploadAlt } from 'react-icons/fa';
 import { useParams } from 'react-router-dom';
 
 const DocumentVersion = () => {
-    const { id } = useParams();
+  const { id } = useParams();
   const [documents, setDocuments] = useState([]);
   const [savedDocuments, setSavedDocuments] = useState([]);
   const [pendingName, setPendingName] = useState('');
@@ -158,20 +158,20 @@ const DocumentVersion = () => {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
-  
+
     const existingDoc = documents.find(d => d.name === pendingName);
-  
+
     if (existingDoc && !forceUpload) {
       // Affiche une modale ou demande confirmation personnalisée
       setConflictingDocName(pendingName);
       setShowConflictPrompt(true); // Cette modale doit avoir un bouton "Oui" → uploadNewVersion
       return;
     }
-  
+
     // Cas standard : upload d’un nouveau document
     await uploadNewDocument();
   };
-  
+
   // 🔽 Nouvelle fonction pour l’upload d’un nouveau document
   const uploadNewDocument = async () => {
     const formData = new FormData();
@@ -186,17 +186,17 @@ const DocumentVersion = () => {
     if (accessType === 'custom') {
       formData.append('allowedUsers', JSON.stringify(allowedUsers));
     }
-  
+
     try {
       const res = await fetch('http://localhost:5000/api/documents/', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       });
-  
+
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Erreur inconnue");
-  
+
       alert(result.message);
       setDocuments([result, ...documents]);
       resetForm();
@@ -205,7 +205,7 @@ const DocumentVersion = () => {
       setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
     }
   };
-  
+
   // 🔽 Fonction appelée quand l'utilisateur clique sur "Oui" dans la modale
   const uploadNewVersion = async (documentId) => {
     const formData = new FormData();
@@ -216,17 +216,17 @@ const DocumentVersion = () => {
     formData.append('description', description);
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
-  
+
     try {
       const res = await fetch(`http://localhost:5000/api/documents/${documentId}/versions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-  
+
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Erreur inconnue");
-  
+
       alert("Nouvelle version ajoutée !");
       // Optionnel : recharge la liste des documents
       setForceUpload(false);
@@ -236,7 +236,7 @@ const DocumentVersion = () => {
       setErrorMessage(err.message || 'Erreur lors de l\'ajout de la version.');
     }
   };
-  
+
   // 🔽 Réinitialisation des champs (à appeler après succès)
   const resetForm = () => {
     setPendingFile(null);
@@ -246,38 +246,45 @@ const DocumentVersion = () => {
     setErrorMessage(null);
     setConflictingDocName('');
   };
-  
-// Étape 1 : Garder seulement la dernière version pour chaque nom de document
-const latestVersionsMap = new Map();
 
-documents.forEach(doc => {
-  const existing = latestVersionsMap.get(doc.name);
-  if (!existing || doc.version > existing.version) {
-    latestVersionsMap.set(doc.name, doc);
-  }
-});
+  // Étape 1 : Garder seulement la dernière version pour chaque nom de document
+  const latestVersionsMap = new Map();
 
-const latestDocuments = Array.from(latestVersionsMap.values());
+  documents.forEach(doc => {
+    const existing = latestVersionsMap.get(doc.name);
+    if (!existing || doc.version > existing.version) {
+      latestVersionsMap.set(doc.name, doc);
+    }
+  });
 
-// Étape 2 : Appliquer les filtres existants sur ces derniers documents
-const filteredDocuments = latestDocuments.filter(doc => {
+  const latestDocuments = Array.from(latestVersionsMap.values());
+
+  // Étape 2 : Appliquer les filtres existants sur ces derniers documents
+  // 1. Trouver le nom du document principal
+  const targetDoc = documents.find(doc => doc.id.toString() === id.toString());
+  const targetName = targetDoc ? targetDoc.name : '';
+
+  // 2. Filtrer tous les documents avec ce nom
+  const filteredDocuments = documents.filter(doc => {
     const docName = doc.name || '';
     const docDate = doc.date ? new Date(doc.date) : null;
     const docContent = doc.text_content || '';
-  
-    const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
-    const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
-  
+
+    const matchesType = docName === targetName; // Garde uniquement ceux avec le même nom
+    const matchesDate =
+      (!startDate || docDate >= new Date(startDate)) &&
+      (!endDate || docDate <= new Date(endDate));
+
     const matchesSearch = useAdvancedFilter
       ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
       : docName.toLowerCase().includes(searchQuery.toLowerCase());
-  
-    // Ajout de la condition pour matcher l'ID spécifique
-    const matchesId = doc.id.toString() === id; // Vérifie si l'ID du document correspond à celui de l'URL
-  
-    return matchesType && matchesDate && matchesSearch && matchesId;
+
+    return matchesType && matchesDate && matchesSearch;
   });
-  
+
+
+
+
   // En haut de ton composant Doc.js
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [modalDoc, setModalDoc] = useState(null);
@@ -316,6 +323,9 @@ const filteredDocuments = latestDocuments.filter(doc => {
     // Tu pourras envoyer les données à l'API ici
   };
 
+  const handleBack = () => {
+    navigate(-1);
+  };
 
   // Confirme et crée
   const handleConfirmCreate = async () => {
@@ -371,9 +381,12 @@ const filteredDocuments = latestDocuments.filter(doc => {
         <Container className="mt-5 d-flex justify-content-center">
           <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
             <Card.Body>
-              <h3 className="text-center mb-4">📂 Liste des documents <h1>Versions du document {id}</h1></h3>
-
-            
+              <Button variant="secondary" size="sm" onClick={handleBack}>
+                ⬅️ Retour
+              </Button>
+              <h3 className="text-center mb-4">
+  📂 Liste des documents : {filteredDocuments[0]?.name || 'Nom inconnu'}
+</h3>
 
               <Table striped bordered hover responsive>
                 <thead>

@@ -90,4 +90,63 @@ router.put('/read/:id', async (req, res) => {
   }
 });
 
+router.post('/:id/request-versions', async (req, res) => {
+  const { id: documentId } = req.params;
+  const userId = req.user?.id || req.body.user_id;
+  if (!userId) return res.status(400).json({ message: 'Utilisateur non authentifié' });
+
+  try {
+    // Récupérer le nom du document
+    const docResult = await pool.query('SELECT name FROM documents WHERE id = $1', [documentId]);
+    if (docResult.rows.length === 0) {
+      return res.status(404).json({ message: 'Document introuvable' });
+    }
+
+    const documentName = docResult.rows[0].name;
+
+    // 🔧 Récupérer l'administrateur
+    const adminResult = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    if (adminResult.rows.length === 0) {
+      return res.status(404).json({ message: "Aucun administrateur trouvé." });
+    }
+    const adminId = adminResult.rows[0].id;
+
+    // 🔔 Création de la notification enrichie
+    const notifQuery = `
+      INSERT INTO notifications (user_id,  document_id, title, message, type, is_read)
+      VALUES ($1, $2, $3, $4, $5, false)
+      RETURNING *`;
+    const notifValues = [
+      adminId,         // user_id → destinataire (admin)
+      userId,          // sender_id → celui qui a fait la demande
+      documentId,      // document concerné
+      'Demande de consultation des versions',
+      `L'utilisateur ${userId} a demandé à consulter les anciennes versions du document "${documentName}".`,
+      'request'        // type utilisé côté frontend
+    ];
+
+    const notifResult = await pool.query(notifQuery, notifValues);
+
+    res.status(201).json({ message: 'Demande envoyée à l\'administrateur', notification: notifResult.rows[0] });
+  } catch (error) {
+    console.error('Erreur lors de la demande de versions', error);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+router.get('/requests', async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM notifications WHERE type = 'request' ORDER BY created_at DESC"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erreur lors de la récupération des demandes de versions', err);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+});
+
+
+
+
 module.exports = router;

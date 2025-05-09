@@ -78,7 +78,7 @@ const DocumentDetails = () => {
   };
 
   const handleBack = () => {
-    navigate('/documents');
+    navigate(-1);
   };
 
   const handleSummarize = async () => {
@@ -141,25 +141,29 @@ const DocumentDetails = () => {
 
   const handleRequestAccess = async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/notifications/request-version-access`, {
+      const res = await fetch(`http://localhost:5000/api/notifications`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          documentId: id,
+          user_id: userId,
+          message: `Demande d'accès aux anciennes versions du document #${id}`,
+          type: 'request',
+          related_task_id: null,
         }),
       });
-
+  
       if (!res.ok) throw new Error("Erreur lors de la demande");
-
+  
       alert("✅ Votre demande d'accès a été envoyée à l'administrateur.");
     } catch (error) {
       console.error("Erreur demande accès :", error);
       alert("❌ Une erreur est survenue lors de la demande.");
     }
   };
+  
 
   // Décoder JWT pour récupérer userId
   useEffect(() => {
@@ -252,13 +256,11 @@ const DocumentDetails = () => {
                           🔒 Demander l'accès aux anciennes versions
                         </Button>
                       )}
-                      <button onClick={handleViewVersions}>Voir les versions</button>
+                        {document.version > 1 && currentUser?.role === 'admin' && (
+                      <button onClick={handleViewVersions}>Voir les versions</button>)}
 
                     </p>
                   )}
-
-
-
 
                   <Button variant="info" onClick={handleSummarize} disabled={isSummarizing}>
                     {isSummarizing ? "Résumé en cours..." : "🧠 Résumer ce document"}
