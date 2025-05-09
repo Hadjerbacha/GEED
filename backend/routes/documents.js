@@ -39,10 +39,14 @@ const upload = multer({
 });
 
 // Fonction de classification des documents (par exemple, CV ou Facture)
+
+
 function classifyText(text) {
   const lower = text.toLowerCase();
   if (lower.includes('facture') || lower.includes('bon') || lower.includes('montant')) return 'facture';
   if (lower.includes('curriculum vitae') || lower.includes('cv') || lower.includes('expérience')) return 'cv';
+  if (lower.includes('contrat') || lower.includes('accord')) return 'contrat';
+  if (lower.includes('rapport') || lower.includes('analyse')) return 'rapport';
   return 'autre';
 }
 
@@ -150,7 +154,7 @@ router.get('/', auth, async (req, res) => {
 });
 // upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name, access, allowedUsers, category } = req.body;
+  const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -174,8 +178,8 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
     }
 
-    extractedText = extractedText.replace(/\u0000/g, '');
-    const finalCategory = category?.trim() || classifyText(extractedText);
+    // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
+    let finalCategory = classifyText(extractedText); 
 
     const existing = await pool.query(
       'SELECT * FROM documents WHERE name = $1 ORDER BY version DESC LIMIT 1',
@@ -191,6 +195,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
       version = parseInt(latestDoc.version, 10) + 1; // ✅ Correction concaténation
       original_id = latestDoc.original_id || latestDoc.id;
     }
+
 
     // ➕ Nouvelle version = nouvelle ligne dans `documents`
     const insertQuery = `

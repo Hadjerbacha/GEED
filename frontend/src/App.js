@@ -28,8 +28,12 @@ import Statistique from './components/Statistique';
 import Reclamation from './components/Reclamation';
 import ReclamationList from './components/ReclamationList';
 import DocVoir from './components/DocVoir';
+<<<<<<< HEAD
 import DocumentVersion from './components/DocumentVersion'; 
 
+=======
+import Archive from './components/Archive';
+>>>>>>> c8520f02445621d63f7f503e8fac017d91e1b3c9
 
 
 function App() {
@@ -39,7 +43,7 @@ function App() {
         <Routes>
           {/* Route non protégée */}
           <Route path="/" element={<Login />} />
-          <Route path="/test" element={<Test />} />
+          <Route path="/test/:id" element={<Test />} />
           <Route path="/test2" element={<Test2 />} />
           <Route path="/test3" element={<Test3 />} />
           <Route path="/test4" element={<Test4 />} />
@@ -66,8 +70,12 @@ function App() {
           <Route path="/ReclamationList" element={<ProtectedRoute element={<ReclamationList />} />} />
           <Route path="/DocVoir" element={<ProtectedRoute element={<DocVoir />} />} />
           <Route path="/docvoir/:id" element={<ProtectedRoute element={<DocVoir />} />} />
+<<<<<<< HEAD
           <Route path="/document/:id/versions" element={<ProtectedRoute element={<DocumentVersion />} />} />
 
+=======
+          <Route path="/archive" element={<ProtectedRoute element={<Archive />} />} />
+>>>>>>> c8520f02445621d63f7f503e8fac017d91e1b3c9
 
         </Routes>
       </Container>

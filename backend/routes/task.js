@@ -8,12 +8,12 @@ const { analyzeWorkflowWithGemini } = require('./gimini');
 const { getWorkflowFromDB } = require('./service');
 // ➕ Ajouter un workflow
 router.post('/', async (req, res) => {
-  const { name, description, echeance, status, priorite, created_by } = req.body;
+  const { name, description, echeance, status, priorite, created_by, documentId } = req.body;
   try {
     const result = await pool.query(
-      `INSERT INTO workflow (name, description, echeance, status, priorite, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [name, description, echeance, status, priorite, created_by]
+      `INSERT INTO workflow (name, description, echeance, status, priorite, created_by, document_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [name, description, echeance, status, priorite, created_by, documentId]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
@@ -176,6 +176,66 @@ router.get('/:id/bpmn', async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur lors de la génération BPMN.' });
+  }
+});
+
+// GET /api/workflows/archives - Récupère tous les workflows archivés
+router.get('/archives', authMiddleware, async (req, res) => {
+  try {
+    // Requête pour récupérer les archives avec des statistiques de base
+    const result = await pool.query(`
+      SELECT 
+        wa.*,
+        w.created_at as workflow_created_at,
+        COUNT(t.id) as total_tasks,
+        COUNT(t.id) FILTER (WHERE t.status = 'completed') as completed_tasks,
+        u.name as creator_name,
+        u.prenom as creator_prenom,
+        d.name as document_title
+      FROM 
+        workflow_archive wa
+        LEFT JOIN workflow w ON wa.workflow_id = w.id
+        LEFT JOIN tasks t ON w.id = t.workflow_id
+        LEFT JOIN users u ON wa.created_by = u.id
+        LEFT JOIN documents d ON wa.document_id = d.id
+      GROUP BY 
+        wa.id, w.created_at, u.name, u.prenom, d.name
+      ORDER BY 
+        wa.completed_at DESC
+    `);
+
+    // Formater les données pour le frontend
+    const archives = result.rows.map(archive => ({
+      id: archive.id,
+      workflow_id: archive.workflow_id,
+      document_id: archive.document_id,
+      document_title: archive.document_title,
+      name: archive.name,
+      description: archive.description,
+      created_by: archive.created_by,
+      creator: `${archive.creator_prenom} ${archive.creator_name}`,
+      completed_at: archive.completed_at,
+      validation_report: archive.validation_report,
+      stats: {
+        total_tasks: archive.total_tasks,
+        completed_tasks: archive.completed_tasks,
+        completion_rate: archive.total_tasks > 0 
+          ? Math.round((archive.completed_tasks / archive.total_tasks) * 100) 
+          : 0
+      },
+      workflow_created_at: archive.workflow_created_at,
+      workflow_duration: archive.completed_at 
+        ? Math.ceil((new Date(archive.completed_at) - new Date(archive.workflow_created_at)) / (1000 * 60 * 60 * 24))
+        : null
+    }));
+
+    res.json(archives);
+  } catch (err) {
+    console.error('Erreur lors de la récupération des archives:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération des archives',
+      details: err.message
+    });
   }
 });
 
@@ -342,4 +402,268 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
       });
     }
   });
+
+  // Route pour mettre à jour le statut d'un workflow
+router.patch('/:id/status', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  // Validation du statut
+  const allowedStatuses = ['pending', 'in_progress', 'completed', 'cancelled'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ 
+      error: 'Statut invalide', 
+      allowedStatuses: allowedStatuses 
+    });
+  }
+
+  try {
+// Mise à jour du statut
+const result = await pool.query(
+  `UPDATE workflow SET status = $1 WHERE id = $2 RETURNING *`,
+  [status, id]
+);
+
+// Archivage automatique si le workflow est terminé
+if (status === 'completed') {
+  // Générer un rapport automatique
+  const report = `Workflow terminé le ${new Date().toLocaleDateString()}`;
+  
+  await pool.query(
+    `INSERT INTO workflow_archive
+     (workflow_id, name, description, document_id, created_by, completed_at, validation_report)
+     VALUES ($1, $2, $3, $4, $5, NOW(), $6)`,
+    [
+      id,
+      result.rows[0].name,
+      result.rows[0].description,
+      result.rows[0].document_id,
+      req.user.id,
+      report
+    ]
+  );
+
+  // Marquer le document comme archivé
+  await pool.query(
+    'UPDATE documents SET is_archived = true WHERE id = $1',
+    [result.rows[0].document_id]
+  );
+}
+
+res.json(result.rows[0]);
+} catch (err) {
+console.error('Erreur:', err);
+res.status(500).json({ error: 'Erreur serveur' });
+}
+});
+
+router.get('/document/:documentId', authMiddleware, async (req, res) => {
+  const { documentId } = req.params;
+  
+  // Validation simple
+  if (!documentId || isNaN(documentId)) {
+    return res.status(400).json({ message: 'ID de document invalide' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT * FROM workflow WHERE document_id = $1 LIMIT 1', // Note: 'workflows' au pluriel?
+      [documentId]
+    );
+    
+    if (result.rows.length > 0) {
+      res.json({ 
+        exists: true, 
+        workflow: result.rows[0] 
+      });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch (err) {
+    console.error('Erreur DB:', err);
+    res.status(500).json({ 
+      message: 'Erreur serveur',
+      error: err.message // Ajoutez ceci pour le débogage
+    });
+  }
+});
+
+// GET /api/workflows/:id/tasks - Récupère toutes les tâches d'un workflow spécifique
+router.get('/:id/tasks', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  
+  try {
+    // 1. Vérifier que le workflow existe
+    const workflowRes = await pool.query(
+      'SELECT id FROM workflow WHERE id = $1', 
+      [id]
+    );
+    
+    if (workflowRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Workflow non trouvé' });
+    }
+
+    // 2. Récupérer les tâches avec les informations des utilisateurs assignés
+    const tasksRes = await pool.query(
+      `SELECT 
+        t.id,
+        t.title,
+        t.description,
+        t.due_date,
+        t.priority,
+        t.status,
+        t.file_path,
+        t.assigned_to,
+        t.created_at,
+        t.assignment_note,
+        jsonb_agg(
+          jsonb_build_object(
+            'id', u.id,
+            'name', u.name,
+            'prenom', u.prenom,
+            'email', u.email
+          )
+        ) FILTER (WHERE u.id IS NOT NULL) as assigned_users
+       FROM tasks t
+       LEFT JOIN unnest(t.assigned_to) WITH ORDINALITY AS a(user_id, ord) ON true
+       LEFT JOIN users u ON u.id = a.user_id
+       WHERE t.workflow_id = $1
+       GROUP BY t.id
+       ORDER BY 
+         CASE WHEN t.due_date IS NULL THEN 1 ELSE 0 END,
+         t.due_date ASC,
+         t.id ASC`,
+      [id]
+    );
+
+    // 3. Formater la réponse
+    const tasks = tasksRes.rows.map(task => ({
+      ...task,
+      due_date: task.due_date ? new Date(task.due_date).toISOString() : null,
+      assigned_users: task.assigned_users || []
+    }));
+
+    res.json(tasks);
+    
+  } catch (err) {
+    console.error('Erreur dans GET /api/workflows/:id/tasks:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la récupération des tâches',
+      details: err.message 
+    });
+  }
+});
+
+// Route PATCH pour mettre à jour partiellement un workflow
+router.patch('/:id', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+
+  try {
+    // Vérifier d'abord si le workflow existe
+    const checkRes = await pool.query(
+      'SELECT * FROM workflow WHERE id = $1',
+      [id]
+    );
+    
+    if (checkRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Workflow non trouvé' });
+    }
+
+    // Construire dynamiquement la requête de mise à jour
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    // Liste des champs autorisés à être mis à jour
+    const allowedFields = ['name', 'description', 'echeance', 'status', 'priorite'];
+    
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
+    }
+
+    // Si aucun champ valide n'a été fourni
+    if (fields.length === 0) {
+      return res.status(400).json({ 
+        error: 'Aucun champ valide fourni pour la mise à jour',
+        allowedFields: allowedFields
+      });
+    }
+
+    // Ajouter la date de mise à jour
+    fields.push(`updated_at = NOW()`);
+
+    // Construire et exécuter la requête finale
+    const queryText = `
+      UPDATE workflow
+      SET ${fields.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+    values.push(id);
+
+    const result = await pool.query(queryText, values);
+    
+    // Enregistrer l'action dans les logs
+    const user = req.user; // Récupéré depuis authMiddleware
+    const message = `Workflow mis à jour par ${user.name} ${user.prenom}`;
+    await logWorkflowAction(id, message);
+
+    res.json({
+      success: true,
+      workflow: result.rows[0],
+      message: 'Workflow mis à jour avec succès'
+    });
+
+  } catch (err) {
+    console.error('Erreur lors de la mise à jour du workflow:', err);
+    res.status(500).json({ 
+      error: 'Erreur lors de la mise à jour du workflow',
+      details: err.message 
+    });
+  }
+});
+
+// routes/task.js
+router.post('/:id/archive', authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { validation_report } = req.body;
+
+  try {
+    // 1. Vérifier que le workflow est terminé
+    const workflowRes = await pool.query(
+      'SELECT * FROM workflow WHERE id = $1 AND status = $2',
+      [id, 'completed']
+    );
+
+    if (workflowRes.rowCount === 0) {
+      return res.status(400).json({ error: 'Le workflow doit être terminé pour être archivé' });
+    }
+
+    // 2. Créer l'archive
+    const archiveRes = await pool.query(
+      `INSERT INTO workflow_archive 
+       (workflow_id, name, description, document_id, created_by, completed_at, validation_report)
+       SELECT id, name, description, document_id, created_by, NOW(), $1
+       FROM workflow WHERE id = $2 RETURNING *`,
+      [validation_report, id]
+    );
+
+    // 3. Marquer le document comme archivé (optionnel)
+    await pool.query(
+      'UPDATE documents SET is_archived = true WHERE id = $1',
+      [workflowRes.rows[0].document_id]
+    );
+
+    res.json(archiveRes.rows[0]);
+  } catch (err) {
+    console.error('Erreur lors de l\'archivage:', err);
+    res.status(500).json({ error: 'Erreur lors de l\'archivage' });
+  }
+});
+
 module.exports = router;
