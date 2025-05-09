@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
+const jwt = require('jsonwebtoken');
 
-// Utilisation de pg pour PostgreSQL
+// Connexion à la base PostgreSQL
 const pool = new Pool({
   user: process.env.PG_USER || 'postgres',
   host: process.env.PG_HOST || 'localhost',
@@ -11,47 +12,55 @@ const pool = new Pool({
   port: process.env.PG_PORT || 5432,
 });
 
-// Ajouter une nouvelle notification
+// Middleware JWT (optionnel, à activer si besoin de protection)
+function verifyToken(req, res, next) {
+  const token = req.headers['authorization']?.split(' ')[1];
+  if (!token) return res.status(403).json({ message: 'Token manquant' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+    req.user = decoded;
+    next();
+  } catch (err) {
+    return res.status(401).json({ message: 'Token invalide' });
+  }
+}
+
+// ➕ Ajouter une nouvelle notification
 router.post('/', async (req, res) => {
-  const { user_id, message, type, related_task_id } = req.body;
+  const { user_id, sender_id, message, type, related_task_id, document_id } = req.body;
 
-  if (!user_id || !message) {
-    return res.status(400).json({ message: 'user_id et message sont obligatoires' });
+  if (!user_id || !sender_id || !message) {
+    return res.status(400).json({ message: 'user_id, sender_id et message sont obligatoires' });
   }
 
-  // Assurez-vous que user_id est un entier
-  const parsedUserId = parseInt(user_id, 10);  // On transforme user_id en entier
-
-  if (isNaN(parsedUserId)) {
-    return res.status(400).json({ message: 'user_id doit être un entier valide' });
-  }
-
-  // Assurez-vous que related_task_id est un entier ou null
+  const parsedUserId = parseInt(user_id, 10);
+  const parsedSenderId = parseInt(sender_id, 10);
   const parsedRelatedTaskId = related_task_id ? parseInt(related_task_id, 10) : null;
+  const parsedDocumentId = document_id ? parseInt(document_id, 10) : null;
 
-  if (related_task_id && isNaN(parsedRelatedTaskId)) {
-    return res.status(400).json({ message: 'related_task_id doit être un entier valide' });
+  if (isNaN(parsedUserId) || isNaN(parsedSenderId)) {
+    return res.status(400).json({ message: 'user_id et sender_id doivent être des entiers valides' });
   }
 
   try {
     const result = await pool.query(
-      'INSERT INTO notifications (user_id, message, type, related_task_id) VALUES ($1, $2, $3, $4) RETURNING *',
-      [parsedUserId, message, type || 'info', parsedRelatedTaskId]
+      `INSERT INTO notifications (user_id, sender_id, message, type, related_task_id, document_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING *`,
+      [parsedUserId, parsedSenderId, message, type || 'info', parsedRelatedTaskId, parsedDocumentId]
     );
-    res.status(201).json(result.rows[0]);  // Retourne la notification ajoutée
+
+    res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error('Erreur lors de l\'ajout de la notification', err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
-// Récupérer les notifications d'un utilisateur
+// 📬 Récupérer les notifications simples d’un utilisateur
 router.get('/:user_id', async (req, res) => {
-  const { user_id } = req.params;
-
-  // Assurez-vous que user_id est un entier
-  const parsedUserId = parseInt(user_id, 10);
-
+  const parsedUserId = parseInt(req.params.user_id, 10);
   if (isNaN(parsedUserId)) {
     return res.status(400).json({ message: 'user_id doit être un entier valide' });
   }
@@ -61,22 +70,52 @@ router.get('/:user_id', async (req, res) => {
       'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC',
       [parsedUserId]
     );
-    res.status(200).json(result.rows);  // Retourne la liste des notifications
+    res.status(200).json(result.rows);
   } catch (err) {
     console.error('Erreur lors de la récupération des notifications', err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
 
-// Mettre à jour le statut de lecture d'une notification
-router.put('/read/:id', async (req, res) => {
-  const { id } = req.params;
+// 📃 Récupérer les notifications enrichies
+router.get('/detailed/:user_id', async (req, res) => {
+  const parsedUserId = parseInt(req.params.user_id, 10);
+  if (isNaN(parsedUserId)) {
+    return res.status(400).json({ message: 'user_id doit être un entier valide' });
+  }
 
   try {
-    // Marquer la notification comme lue
+    const result = await pool.query(`
+      SELECT 
+        n.*,
+        u.name AS sender_first_name,
+        u.prenom AS sender_last_name,
+        d.name AS document_name
+      FROM notifications n
+      LEFT JOIN users u ON n.sender_id = u.id
+      LEFT JOIN documents d ON n.document_id = d.id
+      WHERE n.user_id = $1
+      ORDER BY n.created_at DESC
+    `, [parsedUserId]);
+
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error('Erreur lors de la récupération des notifications enrichies', err);
+    res.status(500).json({ message: 'Erreur serveur' });
+  }
+});
+
+// ✅ Marquer une notification comme lue
+router.put('/read/:id', async (req, res) => {
+  const notificationId = parseInt(req.params.id, 10);
+  if (isNaN(notificationId)) {
+    return res.status(400).json({ message: 'ID de notification invalide' });
+  }
+
+  try {
     const result = await pool.query(
       'UPDATE notifications SET is_read = true WHERE id = $1 RETURNING *',
-      [id]
+      [notificationId]
     );
 
     if (result.rowCount === 0) {
@@ -89,64 +128,5 @@ router.put('/read/:id', async (req, res) => {
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
-
-router.post('/:id/request-versions', async (req, res) => {
-  const { id: documentId } = req.params;
-  const userId = req.user?.id || req.body.user_id;
-  if (!userId) return res.status(400).json({ message: 'Utilisateur non authentifié' });
-
-  try {
-    // Récupérer le nom du document
-    const docResult = await pool.query('SELECT name FROM documents WHERE id = $1', [documentId]);
-    if (docResult.rows.length === 0) {
-      return res.status(404).json({ message: 'Document introuvable' });
-    }
-
-    const documentName = docResult.rows[0].name;
-
-    // 🔧 Récupérer l'administrateur
-    const adminResult = await pool.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
-    if (adminResult.rows.length === 0) {
-      return res.status(404).json({ message: "Aucun administrateur trouvé." });
-    }
-    const adminId = adminResult.rows[0].id;
-
-    // 🔔 Création de la notification enrichie
-    const notifQuery = `
-      INSERT INTO notifications (user_id,  document_id, title, message, type, is_read)
-      VALUES ($1, $2, $3, $4, $5, false)
-      RETURNING *`;
-    const notifValues = [
-      adminId,         // user_id → destinataire (admin)
-      userId,          // sender_id → celui qui a fait la demande
-      documentId,      // document concerné
-      'Demande de consultation des versions',
-      `L'utilisateur ${userId} a demandé à consulter les anciennes versions du document "${documentName}".`,
-      'request'        // type utilisé côté frontend
-    ];
-
-    const notifResult = await pool.query(notifQuery, notifValues);
-
-    res.status(201).json({ message: 'Demande envoyée à l\'administrateur', notification: notifResult.rows[0] });
-  } catch (error) {
-    console.error('Erreur lors de la demande de versions', error);
-    res.status(500).json({ message: 'Erreur serveur' });
-  }
-});
-
-router.get('/requests', async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT * FROM notifications WHERE type = 'request' ORDER BY created_at DESC"
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error('Erreur lors de la récupération des demandes de versions', err);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-});
-
-
-
 
 module.exports = router;

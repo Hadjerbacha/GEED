@@ -53,6 +53,7 @@ app.use('/api/notifications', notifRoutes);
 app.use('/api/workflow', workRoutes);
 app.use('/api/reclamations', reclamationRoutes);
 app.use('/api/', aiRoutes);
+
 // Lancement du serveur
 app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 

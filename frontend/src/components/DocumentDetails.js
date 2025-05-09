@@ -20,8 +20,7 @@ const DocumentDetails = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [showVersions, setShowVersions] = useState(false);
   const [oldVersions, setOldVersions] = useState([]);
-
-
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -141,6 +140,17 @@ const DocumentDetails = () => {
 
   const handleRequestAccess = async () => {
     try {
+      // Trouver l'administrateur
+      const adminUser = users.find(u => u.role === 'admin');
+      if (!adminUser) {
+        alert("❌ Aucun administrateur trouvé.");
+        return;
+      }
+
+      // Log pour vérifier l'ID de l'utilisateur
+      console.log("User ID (expéditeur):", userId);  // Affiche l'ID de l'utilisateur connecté
+      console.log("Admin ID (destinataire):", adminUser.id);  // Affiche l'ID de l'administrateur trouvé
+
       const res = await fetch(`http://localhost:5000/api/notifications`, {
         method: 'POST',
         headers: {
@@ -148,22 +158,37 @@ const DocumentDetails = () => {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          user_id: userId,
-          message: `Demande d'accès aux anciennes versions du document #${id}`,
+          user_id: adminUser.id, // L'admin est le destinataire
+          sender_id: userId,     // L'utilisateur connecté est l'expéditeur
+          message: `Demande d'accés aux anciennes versions du document #${id}`,
           type: 'request',
           related_task_id: null,
+          document_id: id,       // facultatif mais utile pour le suivi
         }),
       });
-  
+
       if (!res.ok) throw new Error("Erreur lors de la demande");
-  
+
+      // Mettre à jour l'état de requestSent après envoi de la demande
+      setRequestSent(true);
+
+      // Sauvegarder dans localStorage
+      localStorage.setItem(`requestSent_${id}`, 'true');
+
       alert("✅ Votre demande d'accès a été envoyée à l'administrateur.");
     } catch (error) {
       console.error("Erreur demande accès :", error);
       alert("❌ Une erreur est survenue lors de la demande.");
     }
   };
-  
+
+  useEffect(() => {
+    // Vérifie si la demande a déjà été envoyée
+    const requestSentStatus = localStorage.getItem(`requestSent_${id}`);
+    if (requestSentStatus === 'true') {
+      setRequestSent(true);
+    }
+  }, [id]);
 
   // Décoder JWT pour récupérer userId
   useEffect(() => {
@@ -252,12 +277,15 @@ const DocumentDetails = () => {
                           variant="warning"
                           className="mt-2"
                           onClick={handleRequestAccess}
+                          disabled={requestSent}  // Désactive le bouton si la demande a été envoyée
                         >
-                          🔒 Demander l'accès aux anciennes versions
+                          {requestSent ? "Demande envoyée" : "🔒 Demander l'accès aux anciennes versions"}
                         </Button>
                       )}
-                        {document.version > 1 && currentUser?.role === 'admin' && (
-                      <button onClick={handleViewVersions}>Voir les versions</button>)}
+                     {document.version > 1 && (
+  (currentUser?.role === 'admin' || document.access === true)
+  && <button onClick={handleViewVersions}>Voir les versions</button>
+)}
 
                     </p>
                   )}
