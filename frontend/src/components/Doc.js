@@ -585,7 +585,7 @@ const Doc = () => {
                           <i className="bi bi-trash"></i>
                         </Button>
 
-                        <Button variant="light" onClick={() => openShareModal(doc)}>
+                        <Button variant="light" size="sm" onClick={() => openShareModal(doc)}>
                           <img src={shareIcon} width="20" alt="Partager" />
                         </Button>
                         <Button

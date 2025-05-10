@@ -565,31 +565,47 @@ export default function WorkflowPage() {
   };
 
   const determineWorkflowStatus = (tasks) => {
-    if (tasks.length === 0) return 'pending'; // Cas par défaut si pas de tâches
+    if (tasks.length === 0) return 'pending';
     
-    const hasPending = tasks.some(t => t.status === 'pending' && t.status !== 'failed');
-    const hasInProgress = tasks.some(t => t.status === 'in_progress' && t.status !== 'failed');
-    const allCompleted = tasks.every(t => 
-      t.status === 'completed' || t.status === 'failed' // Ignorer les tâches failed
-    );
-  
+    const hasPending = tasks.some(t => t.status === 'pending');
+    const hasInProgress = tasks.some(t => t.status === 'in_progress');
+    const allCompleted = tasks.every(t => t.status === 'completed');
+    
     if (hasPending) return 'pending';
     if (hasInProgress) return 'in_progress';
     if (allCompleted) return 'completed';
     
-    return 'pending'; // Cas par défaut
+    return 'pending';
   };
 
-  useEffect(() => {
-    if (tasks.length > 0 && workflow) {
-      const newStatus = determineWorkflowStatus(tasks);
-      if (newStatus !== workflow.status) {
-        // Optionnel : vous pouvez choisir de mettre à jour automatiquement
-        // ou laisser la mise à jour se faire au prochain fetchAll
-        console.log(`Le workflow devrait passer à: ${newStatus}`);
+ // Dans Workflowz.js
+ useEffect(() => {
+  const checkAndArchive = async () => {
+    if (workflow?.status === 'completed') {
+      try {
+        // Vérifier d'abord si le workflow est déjà archivé
+        const archiveCheck = await axios.get(
+          `http://localhost:5000/api/workflows/archives?workflow_id=${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+
+        if (archiveCheck.data.length === 0) { // Si pas encore archivé
+          await axios.post(
+            `http://localhost:5000/api/workflows/${id}/archive`,
+            { validation_report: "Workflow complété automatiquement" },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          toast.success('Workflow archivé avec succès');
+        }
+      } catch (err) {
+        console.error("Erreur lors de l'archivage:", err);
+        toast.error("Échec de l'archivage automatique");
       }
     }
-  }, [tasks, workflow]);
+  };
+
+  checkAndArchive();
+}, [workflow?.status, id, token]);
   
   if (loading) {
     return (

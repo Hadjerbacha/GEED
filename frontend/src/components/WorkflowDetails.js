@@ -88,17 +88,13 @@ const [filterDueDate, setFilterDueDate] = useState('');
   const fetchTasks = async () => {
     try {
       const token = localStorage.getItem("token");
-      const res = await axios.get("http://localhost:5000/api/tasks/", {
+      const res = await axios.get(`http://localhost:5000/api/workflows/${id}/tasks`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-  
-      // Filtrer les tâches pour afficher uniquement celles qui correspondent au workflow_id du workflow actuel
-      const filteredTasks = res.data.filter(task => task.workflow_id === parseInt(id));
-        console.log("Tâches filtrées :", filteredTasks); // Vérification des tâches filtrées
-  
-      setTasks(filteredTasks);
+      
+      setTasks(res.data); // Pas besoin de filtrer, le backend le fait déjà
     } catch (err) {
       console.error("Erreur chargement des tâches", err?.response?.data || err.message);
     }

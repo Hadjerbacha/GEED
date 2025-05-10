@@ -83,7 +83,10 @@ async function initializeDatabase() {
       text_content TEXT,
       owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
       visibility VARCHAR(20) DEFAULT 'private',
-      date TIMESTAMP DEFAULT NOW()
+      date TIMESTAMP DEFAULT NOW(),
+      is_archived BOOLEAN DEFAULT FALSE,
+    version INTEGER DEFAULT 1,
+    original_id INTEGER
 );
 
     `);
@@ -138,6 +141,7 @@ router.get('/', auth, async (req, res) => {
       JOIN document_permissions dp ON dp.document_id = d.id
       LEFT JOIN document_collections dc ON dc.document_id = d.id
       WHERE 
+      d.is_archived = false AND
       dp.access_type = 'public'
       OR (dp.user_id = $1 AND dp.access_type = 'custom')
       OR ( dp.user_id = $1 AND dp.access_type = 'read')
@@ -152,6 +156,7 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
+
 // upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
   const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
@@ -335,7 +340,7 @@ router.get('/:id', auth, async (req, res) => {
       SELECT d.*, dp.access_type
       FROM documents d
       JOIN document_permissions dp ON dp.document_id = d.id
-      WHERE d.id = $1 AND (dp.access_type = 'public' OR dp.user_id = $2 OR dp.access_type = 'custom')
+      WHERE d.id = $1 AND (dp.access_type = 'public' OR dp.user_id = $2 OR dp.access_type = 'custom') AND d.is_archived = false
     `, [id, userId]);
 
     if (result.rows.length === 0) {

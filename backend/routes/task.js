@@ -634,6 +634,16 @@ router.post('/:id/archive', authMiddleware, async (req, res) => {
   const { validation_report } = req.body;
 
   try {
+     // Vérifier si déjà archivé
+     const existingArchive = await pool.query(
+      'SELECT * FROM workflow_archive WHERE workflow_id = $1',
+      [id]
+    );
+    
+    if (existingArchive.rowCount > 0) {
+      return res.status(400).json({ error: 'Ce workflow est déjà archivé' });
+    }
+    
     // 1. Vérifier que le workflow est terminé
     const workflowRes = await pool.query(
       'SELECT * FROM workflow WHERE id = $1 AND status = $2',
