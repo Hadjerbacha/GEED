@@ -81,23 +81,21 @@ const DocumentDetails = () => {
   };
 
   const handleSummarize = async () => {
-    if (!document || !document.text_content) {
-      setSummary("⚠️ Le document ne contient pas de texte à résumer.");
+    if (!document?.text_content) {
+      setSummary("⚠️ Le document ne contient pas de texte analysable.");
       return;
     }
-
+  
     setIsSummarizing(true);
     setSummary(null);
-
+  
     try {
-      const textToSummarize = document.text_content.length > 1000
-        ? document.text_content.substring(0, 1000)
-        : document.text_content;
-
+      // Limite à 10 000 caractères pour éviter les dépassements de tokens
+      const textToSummarize = document.text_content.slice(0, 10000); 
       const summaryText = await generateSummary(textToSummarize);
       setSummary(summaryText);
     } catch (error) {
-      setSummary("❌ Impossible de générer le résumé.");
+      setSummary("❌ Erreur lors de la génération du résumé.");
     } finally {
       setIsSummarizing(false);
     }
@@ -105,11 +103,16 @@ const DocumentDetails = () => {
 
   const generateSummary = async (text) => {
     try {
-      const response = await axios.post("http://localhost:5000/api/summarize", { text });
-      return response.data.summary;
+      const response = await axios.post(
+        "http://localhost:5000/api/summarize",
+        { text },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      return response.data.summary || "Aucun résumé généré.";
     } catch (error) {
-      console.error("Erreur lors de la génération du résumé:", error);
-      return "❌ Une erreur est survenue avec l’API.";
+      console.error("Erreur résumé:", error.response?.data || error.message);
+      return "❌ Impossible de générer le résumé (erreur API).";
     }
   };
 

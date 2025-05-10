@@ -43,11 +43,58 @@ const upload = multer({
 
 function classifyText(text) {
   const lower = text.toLowerCase();
-  if (lower.includes('facture') || lower.includes('bon') || lower.includes('montant')) return 'facture';
-  if (lower.includes('curriculum vitae') || lower.includes('cv') || lower.includes('expérience')) return 'cv';
-  if (lower.includes('contrat') || lower.includes('accord')) return 'contrat';
-  if (lower.includes('rapport') || lower.includes('analyse')) return 'rapport';
-  return 'autre';
+  
+  // Système de scoring pour éviter le biais du "premier match"
+  const categoryScores = {
+    'contrat': 0,
+    'rapport': 0,
+    'mémoire': 0,
+    'présentation': 0,
+    'note interne': 0,
+    'facture': 0,
+    'cv': 0,
+    'photo': 0,
+  };
+
+  // Règles de scoring par catégorie (plus il y a de mots-clés, plus le score est élevé)
+  const rules = {
+    'contrat': ['contrat', 'accord', 'article', 'clause', 'signature', 'parties'],
+    'rapport': ['rapport', 'analyse', 'résumé', 'conclusion', 'recommandation', 'données'],
+    'mémoire': ['mémoire', 'thèse', 'recherche', 'chapitre', 'bibliographie', 'hypothèse', 'matière'],
+    'présentation': ['présentation', 'diapositive', 'slide', 'powerpoint', 'ppt', 'keynote'],
+    'note interne': ['note', 'memo', 'interne', 'information', 'circulaire', 'compte-rendu'],
+    'facture': ['facture', 'bon', 'montant', 'fournisseur', '€', 'euro', 'total à payer', 'tva'],
+    'cv': ['curriculum vitae', 'cv', 'expérience', 'compétence', 'formation', 'diplôme'],
+    'photo': ['photo', 'image', 'photographie', 'selfie', 'insta', 'snap', 'pixel', 'camera'],
+  };
+
+  // Calcul des scores
+  for (const [category, keywords] of Object.entries(rules)) {
+    keywords.forEach(keyword => {
+      if (lower.includes(keyword)) {
+        categoryScores[category] += 1; // +1 point par mot-clé trouvé
+      }
+    });
+  }
+
+  // Détection spéciale pour les photos (OCR + texte court)
+  if (lower.split(/\s+/).length < 10 || /(photo|image|insta|snap|pixel)/.test(lower)) {
+    categoryScores['photo'] += 3; // Bonus pour les photos
+  }
+
+  // Trouver la catégorie avec le score le plus élevé
+  let bestCategory = 'autre';
+  let highestScore = 0;
+
+  for (const [category, score] of Object.entries(categoryScores)) {
+    if (score > highestScore) {
+      highestScore = score;
+      bestCategory = category;
+    }
+  }
+
+  // Seuil minimal pour éviter les faux positifs (ex: "article" seul ne signifie pas forcément "contrat")
+  return highestScore >= 2 ? bestCategory : 'autre';
 }
 
 // GET : récupérer les utilisateurs ayant accès à un document spécifique

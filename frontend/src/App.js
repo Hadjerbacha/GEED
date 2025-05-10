@@ -30,6 +30,7 @@ import ReclamationList from './components/ReclamationList';
 import DocVoir from './components/DocVoir';
 import DocumentVersion from './components/DocumentVersion'; 
 import Archive from './components/Archive';
+import Activite from './components/historique';
 
 
 function App() {
@@ -68,6 +69,7 @@ function App() {
           <Route path="/docvoir/:id" element={<ProtectedRoute element={<DocVoir />} />} />
          <Route path="/document/:id/versions" element={<ProtectedRoute element={<DocumentVersion />} />} />
           <Route path="/archive" element={<ProtectedRoute element={<Archive />} />} />
+          <Route path="/activites" element={<ProtectedRoute element={<Activite />} />} />
         </Routes>
       </Container>
     </Router>

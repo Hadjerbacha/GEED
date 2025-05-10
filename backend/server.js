@@ -17,7 +17,7 @@ const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
 const reclamationRoutes = require('./routes/reclamation');
 const statsRoutes = require('./routes/stats');
-
+const summarizeRoute = require('./routes/summarize');
 
 
 
@@ -36,8 +36,8 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', statsRoutes);
-const summarizeRoute = require('./routes/summarize');
-app.use('/api/summarize', summarizeRoute);
+
+
 
 
 
@@ -53,7 +53,7 @@ app.use('/api/notifications', notifRoutes);
 app.use('/api/workflow', workRoutes);
 app.use('/api/reclamations', reclamationRoutes);
 app.use('/api/', aiRoutes);
-
+app.use('/api/summarize', summarizeRoute);
 // Lancement du serveur
 app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 
