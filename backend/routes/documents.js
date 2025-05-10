@@ -518,6 +518,36 @@ router.post('/', async (req, res) => {
   }
 });
 
+router.put('/:id/access', async (req, res) => {
+  const { id } = req.params;
+  const { access } = req.body;
+
+  try {
+    // Étape 1 : récupérer le nom du document donné
+    const docResult = await pool.query('SELECT name FROM documents WHERE id = $1', [id]);
+    if (docResult.rowCount === 0) {
+      return res.status(404).json({ message: 'Document non trouvé' });
+    }
+
+    const docName = docResult.rows[0].name;
+
+    // Étape 2 : mettre à jour tous les documents qui ont le même nom
+    const updateResult = await pool.query(
+      'UPDATE documents SET access = $1 WHERE name = $2 RETURNING *',
+      [access, docName]
+    );
+
+    res.status(200).json({
+      message: `Accès mis à jour pour tous les documents nommés "${docName}"`,
+      documents: updateResult.rows,
+    });
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour de l\'accès :', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+
 
 
 // Initialisation des tables

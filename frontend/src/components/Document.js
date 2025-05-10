@@ -309,6 +309,10 @@ const Document = () => {
     return matchesType && matchesDate && (matchesSearch || matchesAdvanced);
   });
 
+  const getAllVersionsOfDocument = (documents, documentId) => {
+    return documents.filter(doc => doc.original_document_id?.toString() === documentId.toString() || doc.id.toString() === documentId.toString());
+  };
+
   return (
     <div className="container">
       <div className="content">

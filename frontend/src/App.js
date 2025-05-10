@@ -28,6 +28,7 @@ import Statistique from './components/Statistique';
 import Reclamation from './components/Reclamation';
 import ReclamationList from './components/ReclamationList';
 import DocVoir from './components/DocVoir';
+import DocumentVersion from './components/DocumentVersion'; 
 import Archive from './components/Archive';
 
 
@@ -65,8 +66,8 @@ function App() {
           <Route path="/ReclamationList" element={<ProtectedRoute element={<ReclamationList />} />} />
           <Route path="/DocVoir" element={<ProtectedRoute element={<DocVoir />} />} />
           <Route path="/docvoir/:id" element={<ProtectedRoute element={<DocVoir />} />} />
+         <Route path="/document/:id/versions" element={<ProtectedRoute element={<DocumentVersion />} />} />
           <Route path="/archive" element={<ProtectedRoute element={<Archive />} />} />
-
         </Routes>
       </Container>
     </Router>
