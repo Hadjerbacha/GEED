@@ -282,11 +282,21 @@ const DocumentDetails = () => {
                           {requestSent ? "Demande envoyée" : "🔒 Demander l'accès aux anciennes versions"}
                         </Button>
                       )}
-                     {document.version > 1 && (
-  (currentUser?.role === 'admin' || document.access === true)
-  && <button onClick={handleViewVersions}>Voir les versions</button>
-)}
-
+                      {document.version > 1 && (
+                        (currentUser?.role === 'admin' || document.access === true)
+                        && <Button
+                          variant="outline-secondary"
+                          className="mt-2 rounded-pill fw-semibold px-4 py-2"
+                          onClick={handleViewVersions}
+                          style={{
+                            transition: 'all 0.2s ease-in-out',
+                          }}
+                          onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.95)'}
+                          onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                        >
+                          Voir les versions
+                        </Button>
+                      )}
                     </p>
                   )}
 

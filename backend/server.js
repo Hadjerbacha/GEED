@@ -17,6 +17,8 @@ const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
 const reclamationRoutes = require('./routes/reclamation');
 const statsRoutes = require('./routes/stats');
+const dossierRoutes = require('./routes/dossier'); // Assure-toi que le chemin est correct
+
 
 
 
@@ -43,6 +45,7 @@ app.use('/api/summarize', summarizeRoute);
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use('/api', dossierRoutes);
 app.use("/api/documents", docsRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/collection",collectionRoutes);

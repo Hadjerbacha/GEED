@@ -126,25 +126,38 @@ async function initializeDatabase() {
   }
 }
 
-// GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
-  const userId = req.user.id; // récupéré depuis le token
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin'; // Adapte si nécessaire
 
   try {
-    const result = await pool.query(
-      `
-      SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
-      FROM documents d
-      JOIN document_permissions dp ON dp.document_id = d.id
-      LEFT JOIN document_collections dc ON dc.document_id = d.id
-      WHERE 
-      dp.access_type = 'public'
-      OR (dp.user_id = $1 AND dp.access_type = 'custom')
-      OR ( dp.user_id = $1 AND dp.access_type = 'read')
-      ORDER BY d.date DESC;
-      `,
-      [userId]
-    );
+    let result;
+
+    if (isAdmin) {
+      // Admin : accès à tous les documents
+      result = await pool.query(`
+        SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
+        FROM documents d
+        LEFT JOIN document_collections dc ON dc.document_id = d.id
+        ORDER BY d.date DESC;
+      `);
+    } else {
+      // Utilisateur normal : documents accessibles via permissions
+      result = await pool.query(
+        `
+        SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
+        FROM documents d
+        JOIN document_permissions dp ON dp.document_id = d.id
+        LEFT JOIN document_collections dc ON dc.document_id = d.id
+        WHERE 
+          dp.access_type = 'public'
+          OR (dp.user_id = $1 AND dp.access_type = 'custom')
+          OR (dp.user_id = $1 AND dp.access_type = 'read')
+        ORDER BY d.date DESC;
+        `,
+        [userId]
+      );
+    }
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -152,6 +165,7 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
+
 // upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
   const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
@@ -541,6 +555,49 @@ router.put('/:id/access', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
+
+// POST /api/categories
+router.post('/categories', auth, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: "Nom de catégorie requis" });
+
+  try {
+    const result = await pool.query(
+      'INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [name]
+    );
+    res.status(201).json(result.rows[0] || { message: "Catégorie déjà existante" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+
+// POST /api/documents/check-duplicate
+router.post('/check-duplicate', async (req, res) => {
+  const { text_content } = req.body;
+  if (!text_content) return res.status(400).json({ error: 'Texte manquant' });
+
+  try {
+    const result = await pool.query(
+      'SELECT name FROM documents WHERE text_content = $1 LIMIT 1',
+      [text_content]
+    );
+
+    if (result.rows.length > 0) {
+      return res.json({ exists: true, documentName: result.rows[0].name });
+    } else {
+      return res.json({ exists: false });
+    }
+  } catch (err) {
+    console.error('Erreur lors de la vérification du doublon:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+
 
 
 
