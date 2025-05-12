@@ -362,7 +362,7 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
     console.error("Erreur lors de la génération ou insertion :", error);
     res.status(500).json({ error: "Erreur serveur lors de la génération de tâches." });
   }
-});
+}); 
 
 // Route pour analyser les logs avec Gemini
   router.post('/:id/analyze-logs', authMiddleware, async (req, res) => {
