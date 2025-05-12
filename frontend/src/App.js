@@ -30,8 +30,7 @@ import ReclamationList from './components/ReclamationList';
 import DocVoir from './components/DocVoir';
 import DocumentVersion from './components/DocumentVersion'; 
 import Archive from './components/Archive';
-
-
+import 'bootstrap/dist/css/bootstrap.min.css';
 
 function App() {
   return (

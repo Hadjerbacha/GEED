@@ -11,14 +11,17 @@ import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
 import { FaCloudUploadAlt } from 'react-icons/fa';
 import Tesseract from 'tesseract.js';
-import pdfjsLib from 'pdfjs-dist'; 
+import { getDocument } from 'pdfjs-dist/webpack'; // Importer getDocument depuis pdfjs-dist
+
+
+
 
 const Doc = () => {
+  const [errorMessage, setErrorMessage] = useState('');
   const [documents, setDocuments] = useState([]);
   const [savedDocuments, setSavedDocuments] = useState([]);
   const [pendingName, setPendingName] = useState('');
   const [pendingFile, setPendingFile] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('Tous les documents');
   const [startDate, setStartDate] = useState('');
@@ -52,6 +55,11 @@ const Doc = () => {
   const [existingWorkflow, setExistingWorkflow] = useState(null);
   const categories = ['Contrat', 'Mémoire', 'Article', 'Rapport'];
   const [selectedCategory, setSelectedCategory] = useState('');
+  const [summary, setSummary] = useState('');
+  const [access, setAccess] = useState('private');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
 
 
   const [formData, setFormData] = useState({
@@ -142,133 +150,140 @@ const Doc = () => {
     }
   };
 
- const handleUpload = async () => {
-  if (!pendingFile || !pendingName) {
-    setErrorMessage('Veuillez remplir tous les champs requis.');
-    return;
-  }
-
-  let extractedText = '';
-
-  try {
-    // Vérifier si le fichier est une image ou un PDF
-    if (pendingFile.type.startsWith('image/')) {
-      // Si c'est une image, applique l'OCR
-      const imageUrl = URL.createObjectURL(pendingFile);
-      const result = await Tesseract.recognize(imageUrl, 'eng', {
-        logger: m => console.log(m), // Pour le debug
-      });
-      extractedText = result.data.text;
-      console.log('Texte OCR extrait de l\'image :', extractedText);
-    } else if (pendingFile.type === 'application/pdf') {
-      // Si c'est un PDF, extraire les pages et appliquer l'OCR sur chaque image
-      extractedText = await processPDFOCR(pendingFile);
-    } else {
-      setErrorMessage('Fichier non supporté.');
+  const handleUpload = async () => {
+    if (!pendingFile || !pendingName) {
+      setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
 
-    // Vérifier si un document avec ce contenu existe déjà
-    const existingContent = documents.find(d => d.text_content === extractedText);
-    if (existingContent && !forceUpload) {
-      setErrorMessage('Un document avec un contenu similaire existe déjà.');
-      return; // Stop ici si doublon de contenu
+    let extractedText = '';
+
+    try {
+      // Vérifier si le fichier est une image ou un PDF
+      if (pendingFile.type.startsWith('image/')) {
+        // Si c'est une image, applique l'OCR
+        const imageUrl = URL.createObjectURL(pendingFile);
+        const result = await Tesseract.recognize(imageUrl, 'eng', {
+          logger: m => console.log(m), // Pour le debug
+        });
+        extractedText = result.data.text;
+        console.log('Texte OCR extrait de l\'image :', extractedText);
+      } else if (pendingFile.type === 'application/pdf') {
+        // Si c'est un PDF, extraire les pages et appliquer l'OCR sur chaque image
+        extractedText = await processPDFOCR(pendingFile);
+      } else {
+        setErrorMessage('Fichier non supporté.');
+        return;
+      }
+
+      // Vérifier si un document avec ce contenu existe déjà
+      const existingContent = documents.find(d => d.text_content === extractedText);
+      if (existingContent && !forceUpload) {
+        setErrorMessage('Un document avec un contenu similaire existe déjà.');
+        return; // Stop ici si doublon de contenu
+      }
+
+    } catch (ocrErr) {
+      console.error('Erreur OCR :', ocrErr);
+      setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
+      return;
     }
 
-  } catch (ocrErr) {
-    console.error('Erreur OCR :', ocrErr);
-    setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
-    return;
-  }
+    // Vérifier si le nom du fichier existe déjà
+    const existingDoc = documents.find(d => d.name === pendingName);
+    if (existingDoc && !forceUpload) {
+      setConflictingDocName(pendingName);
+      setShowConflictPrompt(true);
+      return;
+    }
 
-  // Vérifier si le nom du fichier existe déjà
-  const existingDoc = documents.find(d => d.name === pendingName);
-  if (existingDoc && !forceUpload) {
-    setConflictingDocName(pendingName);
-    setShowConflictPrompt(true);
-    return;
-  }
+    // Vérifier la taille du fichier
+    if (pendingFile.size > 10 * 1024 * 1024) {
+      setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
+      return;
+    }
 
-  // Vérifier la taille du fichier
-  if (pendingFile.size > 10 * 1024 * 1024) {
-    setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
-    return;
-  }
+    // Si tout est bon, procéder à l'upload du document
+    await uploadNewDocument(extractedText);
+  };
 
-  // Si tout est bon, procéder à l'upload du document
-  await uploadNewDocument(extractedText);
-};
+  // Fonction pour traiter un PDF et extraire le texte de ses pages
+  const processPDFOCR = async (pdfFile) => {
+    let extractedText = '';
+    try {
+      const pdfUrl = URL.createObjectURL(pdfFile);
+      const pdf = await getDocument(pdfUrl).promise;  // Utiliser getDocument
+      // Extraire les pages en images et appliquer l'OCR sur chaque image
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
 
-// Fonction pour traiter un PDF et extraire le texte de ses pages
-const processPDFOCR = async (pdfFile) => {
-  let extractedText = '';
-  try {
-    const pdfUrl = URL.createObjectURL(pdfFile);
-    const pdf = await pdfjsLib.getDocument(pdfUrl).promise;
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
 
-    // Extraire les pages en images et appliquer l'OCR sur chaque image
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      const page = await pdf.getPage(pageNum);
-      const viewport = page.getViewport({ scale: 1.5 });
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-      const canvas = document.createElement('canvas');
-      const context = canvas.getContext('2d');
-      canvas.height = viewport.height;
-      canvas.width = viewport.width;
+        // Appliquer l'OCR sur l'image de la page
+        const result = await Tesseract.recognize(canvas.toDataURL(), 'eng', {
+          logger: m => console.log(m),
+        });
 
-      await page.render({ canvasContext: context, viewport: viewport }).promise;
+        extractedText += result.data.text;
+        console.log(`Texte OCR extrait de la page ${pageNum}:`, result.data.text);
+      }
+    } catch (ocrErr) {
+      console.error('Erreur OCR sur le PDF :', ocrErr);
+      setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
+      return '';
+    }
+    return extractedText;
+  };
 
-      // Appliquer l'OCR sur l'image de la page
-      const result = await Tesseract.recognize(canvas.toDataURL(), 'eng', {
-        logger: m => console.log(m),
+  // Fonction pour l'upload du document
+  const uploadNewDocument = async (extractedText) => {
+    const formData = new FormData();
+    formData.append('name', pendingName);
+    formData.append('file', pendingFile);
+    formData.append('text_content', extractedText);
+    formData.append('summary', description);
+    formData.append('tags', tags);
+    formData.append('access', accessType);
+    formData.append('prio', priority);
+
+    if (access === 'custom') {
+      selectedUsers.forEach(userId => formData.append('allowedUsers[]', userId));
+    }
+
+    try {
+      const res = await axios.post('http://localhost:5000/api/documents/', formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
+        },
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percent); // ← ici tu mets à jour l'état
+        },
       });
 
-      extractedText += result.data.text;
-      console.log(`Texte OCR extrait de la page ${pageNum}:`, result.data.text);
+      const newDoc = res.data;
+      setDocuments([newDoc, ...documents]);
+
+      // Reset
+      setPendingFile(null);
+      setPendingName('');
+      setUploadProgress(0); // reset la barre
+      setErrorMessage(null);
+      setConflictingDocName('');
+      setShowConflictPrompt(false);
+    } catch (err) {
+      console.error('Erreur lors de l\'upload du document:', err);
+      setErrorMessage(err.response?.data?.error || 'Erreur lors de l\'envoi du document.');
+      setUploadProgress(0);
     }
-  } catch (ocrErr) {
-    console.error('Erreur OCR sur le PDF :', ocrErr);
-    setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
-    return '';
-  }
-  return extractedText;
-};
-
-// Fonction pour l'upload du document
-const uploadNewDocument = async (extractedText) => {
-  const formData = new FormData();
-  formData.append('name', pendingName);
-  formData.append('file', pendingFile);
-  formData.append('text_content', extractedText);
-
-  try {
-    const res = await fetch('http://localhost:5000/api/documents/', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: formData,
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      throw new Error(errorData.error || `Erreur: ${res.status}`);
-    }
-
-    const newDoc = await res.json();
-    setDocuments([newDoc, ...documents]);
-
-    // Réinitialiser les valeurs après upload
-    setPendingFile(null);
-    setPendingName('');
-    setErrorMessage(null);
-    setConflictingDocName('');
-    setShowConflictPrompt(false);
-  } catch (err) {
-    console.error('Erreur lors de l\'upload du document:', err);
-    setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
-  }
-};
+  };
 
   const uploadNewVersion = async (documentId) => {
     const formData = new FormData();
@@ -330,24 +345,45 @@ const uploadNewDocument = async (extractedText) => {
   const latestDocuments = Array.from(latestVersionsMap.values());
 
   // Étape 2 : Appliquer les filtres existants sur ces derniers documents
- const filteredDocuments = latestDocuments.filter(doc => {
-  const docName = doc.name || '';
-  const docDate = doc.date ? new Date(doc.date) : null;
-  const docContent = doc.text_content || '';
-  const docCategory = doc.category || '';
+  const filteredDocuments = latestDocuments.filter(doc => {
+    const docName = doc.name || '';
+    const docFilePath = doc.file_path || ''; // Utilisation de file_path pour extraire l'extension
+    const docDate = doc.date ? new Date(doc.date) : null;
+    const docContent = doc.text_content || '';
+    const docCategory = doc.category || '';
+    const docSummary = doc.summary || '';
+    const docDescription = doc.description || ''; // Ajout description
+    const docTags = Array.isArray(doc.tags) ? doc.tags : [];
+    const docFolder = doc.folder || ''; // Si tu as un dossier associé au document
+    const docAuthor = doc.author || ''; // Si tu as un auteur associé au document
 
-  const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
-  const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
+    // Extraire l'extension du fichier à partir du chemin complet
+    const fileExtension = docFilePath.split('.').pop().toLowerCase(); // Extraire l'extension du fichier depuis le chemin
 
-  const matchesSearch = useAdvancedFilter
-    ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
-    : docName.toLowerCase().includes(searchQuery.toLowerCase());
+    // Filtrer selon le type du document (extension)
+    const matchesType = filterType === 'Tous les documents' ||
+      fileExtension === filterType.toLowerCase();  // Comparer sans le point dans filterType
 
-  const matchesCategory = selectedCategory === '' || 
-  (doc.category && doc.category.toLowerCase() === selectedCategory.toLowerCase());
+    const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
 
-  return matchesType && matchesDate && matchesSearch && matchesCategory;
-});
+    // Recherche avancée avec ajout de la description et d'autres champs possibles
+    const matchesSearch = useAdvancedFilter
+      ? (
+        docContent.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        docSummary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        docDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||  // Recherche dans la description
+        docFolder.toLowerCase().includes(searchQuery.toLowerCase()) ||  // Recherche dans le dossier
+        docAuthor.toLowerCase().includes(searchQuery.toLowerCase()) ||  // Recherche dans l'auteur
+        docTags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+      : docName.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesCategory = selectedCategory === '' ||
+      (doc.category && doc.category.toLowerCase() === selectedCategory.toLowerCase());
+
+    return matchesType && matchesDate && matchesSearch && matchesCategory;
+  });
+
 
 
   const handleOpenConfirm = async (doc) => {
@@ -459,12 +495,15 @@ const uploadNewDocument = async (extractedText) => {
       <div className="container-fluid">
         <Row className="my-3">
           <Col md={4}><Form.Control type="text" placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></Col>
-          <Col md={2}><Form.Select value={filterType} onChange={e => setFilterType(e.target.value)}>
-            <option value="Tous les documents">Tous</option>
-            <option value=".pdf">PDF</option>
-            <option value=".docx">Word</option>
-            <option value=".jpg">Images</option>
-          </Form.Select></Col>
+          <Col md={2}>
+            <Form.Select value={filterType} onChange={e => setFilterType(e.target.value)}>
+              <option value="Tous les documents">Tous</option>
+              <option value="pdf">PDF</option>
+              <option value="docx">Word</option>
+              <option value="jpg">Images</option>
+            </Form.Select>
+          </Col>
+
           <Col md={2}><Form.Control type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></Col>
           <Col md={2}><Form.Control type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></Col>
           <Col md={2}><Button variant={useAdvancedFilter ? 'danger' : 'success'} onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}>
@@ -539,7 +578,8 @@ const uploadNewDocument = async (extractedText) => {
                             value={allUsers.filter(option => allowedUsers.includes(option.value))}
                             onChange={(selectedOptions) => {
                               const selectedUserIds = selectedOptions.map(opt => opt.value);
-                              setAllowedUsers(selectedUserIds);
+                              setSelectedUsers(selectedUserIds); 
+                               setAllowedUsers(selectedUserIds);
                             }}
                             placeholder="Sélectionner des utilisateurs..."
                             className="basic-multi-select"
@@ -634,35 +674,33 @@ const uploadNewDocument = async (extractedText) => {
                 )}
               </Card.Body>
 
-             <div className="d-flex gap-2 mt-3">
-  <Button
-    key="all"
-    variant={selectedCategory === '' ? 'secondary' : 'outline-secondary'}
-    className="rounded-pill fw-semibold px-4 py-2 flex-grow-1 text-center"
-    style={{ transition: 'all 0.2s ease-in-out' }}
-    onClick={() => setSelectedCategory('')}
-    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
-    onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-  >
-    Toutes
-  </Button>
+              <div className="d-flex gap-2 mt-3">
+                <Button
+                  key="all"
+                  variant={selectedCategory === '' ? 'secondary' : 'outline-secondary'}
+                  className="rounded-pill fw-semibold px-4 py-2 flex-grow-1 text-center"
+                  style={{ transition: 'all 0.2s ease-in-out' }}
+                  onClick={() => setSelectedCategory('')}
+                  onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+                  onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  Toutes
+                </Button>
 
-  {categories.map(cat => (
-    <Button
-      key={cat}
-      variant={selectedCategory === cat ? 'secondary' : 'outline-secondary'}
-      className="rounded-pill fw-semibold px-4 py-2 flex-grow-1 text-center"
-      style={{ transition: 'all 0.2s ease-in-out' }}
-      onClick={() => setSelectedCategory(cat)}
-      onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
-      onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
-    >
-      {cat}
-    </Button>
-  ))}
-</div>
-
-
+                {categories.map(cat => (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? 'secondary' : 'outline-secondary'}
+                    className="rounded-pill fw-semibold px-4 py-2 flex-grow-1 text-center"
+                    style={{ transition: 'all 0.2s ease-in-out' }}
+                    onClick={() => setSelectedCategory(cat)}
+                    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+                    onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    {cat}
+                  </Button>
+                ))}
+              </div>
 
               <Table striped bordered hover responsive>
                 <thead>

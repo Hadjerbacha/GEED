@@ -76,15 +76,21 @@ async function initializeDatabase() {
     // Table pour les documents
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      file_path TEXT NOT NULL,
-      category TEXT,
-      text_content TEXT,
-      owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      visibility VARCHAR(20) DEFAULT 'private',
-      date TIMESTAMP DEFAULT NOW()
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  category TEXT,
+  text_content TEXT,
+  summary TEXT,               -- 🆕 Description
+  tags TEXT[],                -- 🆕 Tableau de mots-clés
+  owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  visibility VARCHAR(20) DEFAULT 'private',
+  version INTEGER DEFAULT 1,
+  original_id INTEGER,
+  ocr_text TEXT,
+  date TIMESTAMP DEFAULT NOW()
 );
+
 
     `);
 
@@ -165,10 +171,10 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
-
-// upload document
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
+  let { name, access, allowedUsers, summary, tags, prio } = req.body;
+  summary = summary || '';
+
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -181,6 +187,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
 
+    // OCR ou parsing PDF
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
@@ -192,9 +199,10 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
     }
 
-    // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
-    let finalCategory = classifyText(extractedText); 
+    // Classification automatique si besoin
+    let finalCategory = classifyText(extractedText);
 
+    // Recherche d'une version existante
     const existing = await pool.query(
       'SELECT * FROM documents WHERE name = $1 ORDER BY version DESC LIMIT 1',
       [name]
@@ -206,33 +214,44 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     if (existing.rowCount > 0) {
       const latestDoc = existing.rows[0];
-      version = parseInt(latestDoc.version, 10) + 1; // ✅ Correction concaténation
+      version = parseInt(latestDoc.version, 10) + 1;
       original_id = latestDoc.original_id || latestDoc.id;
     }
 
+    // Traitement des tags
+    const parsedTags = typeof tags === 'string'
+      ? tags.split(',').map(tag => tag.trim())
+      : [];
 
-    // ➕ Nouvelle version = nouvelle ligne dans `documents`
+    // Insertion dans la table documents
     const insertQuery = `
-      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text, version, original_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *;
-    `;
+  INSERT INTO documents 
+  (name, file_path, category, text_content, owner_id, visibility,
+  ocr_text, version, original_id, summary, tags, priority)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+  RETURNING *;
+`;
+
     const insertValues = [
-      name,
-      file_path,
-      finalCategory,
-      extractedText,
-      req.user.id,
-      access,
-      extractedText,
-      version,
-      original_id
-    ];
+  name,
+  file_path,
+  finalCategory,
+  extractedText,
+  req.user.id,
+  access,
+  extractedText,
+  version,
+  original_id,
+  summary,
+  parsedTags,
+  prio
+];
+
 
     result = await pool.query(insertQuery, insertValues);
     const documentId = result.rows[0].id;
 
-    // 🔐 Gestion des permissions (uniquement à l'insertion)
+    // Gestion des permissions
     if (access === 'public') {
       const allUsers = await pool.query('SELECT id FROM users');
       await Promise.all(allUsers.rows.map(user =>
@@ -255,6 +274,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
       );
     }
 
+    // Réponse
     res.status(201).json({
       ...result.rows[0],
       preview: extractedText.slice(0, 300) + '...',
@@ -264,10 +284,12 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => {});
+    if (req.file) fs.unlink(req.file.path, () => { });
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
+
+
 
 
 
