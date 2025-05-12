@@ -9,6 +9,7 @@ import { fr } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import { FiDownload, FiSearch, FiFilter, FiPrinter, FiFileText } from 'react-icons/fi';
 import Navbar from './Navbar';
+import { jsPDF } from 'jspdf';
 
 const ArchivePage = () => {
   const [archives, setArchives] = useState([]);
@@ -24,7 +25,7 @@ const ArchivePage = () => {
     reportType: 'all'
   });
 
-  // Fonction de récupération des archives avec filtres
+  // Fetch archives with filters
   const fetchArchives = async () => {
     setLoading(true);
     try {
@@ -34,14 +35,15 @@ const ArchivePage = () => {
         limit: itemsPerPage,
         search: searchTerm,
         sort: `${sortConfig.key},${sortConfig.direction}`,
-        ...filters
+        ...filters,
+        include: 'tasks,document'
       };
-
+  
       const res = await axios.get('http://localhost:5000/api/workflows/archives', {
         params,
         headers: { Authorization: `Bearer ${token}` }
       });
-
+  
       setArchives(res.data);
     } catch (err) {
       handleFetchError(err);
@@ -64,7 +66,7 @@ const ArchivePage = () => {
     fetchArchives();
   }, [currentPage, searchTerm, sortConfig, filters]);
 
-  // Tri des données
+  // Sort data
   const requestSort = (key) => {
     let direction = 'asc';
     if (sortConfig.key === key && sortConfig.direction === 'asc') {
@@ -73,33 +75,162 @@ const ArchivePage = () => {
     setSortConfig({ key, direction });
   };
 
-  // Téléchargement des rapports
-  const downloadReport = (archive, format = 'txt') => {
-    const content = format === 'pdf' 
-      ? generatePdfReport(archive) 
-      : archive.validation_report;
-    
+  // Download report
+  const downloadReport = async (archive, fileFormat = 'pdf') => {
+    try {
+      if (fileFormat === 'pdf') {
+        await generateAndDownloadPdf(archive);
+      } else {
+        downloadTextReport(archive);
+      }
+    } catch (error) {
+      console.error('Error generating report:', error);
+      toast.error('Erreur lors de la génération du rapport');
+    }
+  };
+
+  // Download text report
+  const downloadTextReport = (archive) => {
+    const content = archive.validation_report || 'Aucun rapport disponible';
     const element = document.createElement('a');
-    const file = new Blob([content], {type: `text/${format}`});
+    const file = new Blob([content], {type: 'text/plain'});
     element.href = URL.createObjectURL(file);
-    element.download = `rapport_${archive.document_id}_${format(parseISO(archive.completed_at), 'yyyy-MM-dd')}.${format}`;
+    element.download = `rapport_${archive.document_id}_${format(parseISO(archive.completed_at), 'yyyy-MM-dd')}.txt`;
     document.body.appendChild(element);
     element.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(element.href);
+      document.body.removeChild(element);
+    }, 100);
   };
 
-  // Génération PDF (simplifiée)
-  const generatePdfReport = (archive) => {
-    return `
-      ===== RAPPORT PDF =====
-      Workflow: ${archive.name}
-      Document: DOC-${archive.document_id}
-      Date: ${format(parseISO(archive.completed_at), 'PPpp', { locale: fr })}
-      
-      ${archive.validation_report}
-    `;
+  // Generate and download PDF report
+  const generateAndDownloadPdf = async (archive) => {
+    const doc = new jsPDF();
+    const marginLeft = 14;
+    let yPosition = 20;
+  
+    // Configuration générale
+    doc.setFont('Times', 'normal');
+    doc.setFontSize(18);
+    doc.text('RAPPORT DE VALIDATION', 105, yPosition, { align: 'center' });
+  
+    yPosition += 10;
+    doc.setFontSize(12);
+    if (archive.automated) {
+      doc.setTextColor(100);
+      doc.text('⚙️  Ce workflow a été complété automatiquement.', 105, yPosition, { align: 'center' });
+      doc.setTextColor(0, 0, 0);
+      yPosition += 10;
+    }
+  
+    // ✳️ Introduction
+    const intro = `
+  Le document intitulé "${archive.document?.name || 'Non spécifié'}" a été validé via le workflow "${archive.name}".
+  Ce processus, destiné à assurer la conformité et la traçabilité des actions réalisées, a été mené à son terme avec succès le ${format(parseISO(archive.completed_at), 'PPPP', { locale: fr })}.
+  Le présent rapport fournit une vue complète sur le document, son cheminement, et les actions effectuées.`;
+  
+    const splitIntro = doc.splitTextToSize(intro, 180);
+    doc.setFontSize(12);
+    doc.text(splitIntro, marginLeft, yPosition);
+    yPosition += splitIntro.length * 7;
+  
+    // 📌 Section 1 - Informations Générales
+    yPosition += 5;
+    doc.setFontSize(14);
+    doc.text('1. Informations Générales', marginLeft, yPosition);
+    doc.setFontSize(12);
+    yPosition += 8;
+  
+    const formatDate = (dateStr) => format(parseISO(dateStr), 'PPpp', { locale: fr });
+  
+    const infoLines = [
+      `🔹 Workflow : ${archive.name || 'Non spécifié'}`,
+      `🔹 ID Document : DOC-${archive.document_id}`,
+      `🔹 Statut : ${archive.status}`,
+      `🔹 Date de création : ${formatDate(archive.workflow_created_at)}`,
+      `🔹 Date d'achèvement : ${formatDate(archive.completed_at)}`,
+      `🔹 Durée totale : ${archive.stats?.workflow_duration || 'N/A'} jours`
+    ];
+    infoLines.forEach(line => {
+      doc.text(line, marginLeft, yPosition);
+      yPosition += 7;
+    });
+  
+    // 📄 Section 2 - Détails du Document
+    yPosition += 5;
+    doc.setFontSize(14);
+    doc.text('2. Détails du Document', marginLeft, yPosition);
+    doc.setFontSize(12);
+    yPosition += 8;
+  
+    const docDetails = [
+      `Nom : ${archive.document?.name || 'Non spécifié'}`,
+      `Type : ${archive.document?.category || 'Non spécifié'}`,
+      `Description : ${archive.document?.description || 'Non spécifié'}`,
+      `Priorité : ${archive.document?.priority || 'Non spécifié'}`,
+      `Tags : ${archive.document?.tags?.join(', ') || 'Aucun'}`
+    ];
+    docDetails.forEach(line => {
+      doc.text(line, marginLeft, yPosition);
+      yPosition += 7;
+    });
+  
+    // ✅ Section 3 - Parcours des Tâches
+    yPosition += 5;
+    doc.setFontSize(14);
+    doc.text('3. Parcours des Tâches', marginLeft, yPosition);
+    doc.setFontSize(12);
+    yPosition += 8;
+  
+    if (archive.tasks && archive.tasks.length > 0) {
+      archive.tasks.forEach((task, index) => {
+        if (yPosition > 250) {
+          doc.addPage();
+          yPosition = 20;
+        }
+  
+        doc.text(`🔸 Tâche ${index + 1} : ${task.title}`, marginLeft, yPosition);
+        yPosition += 7;
+        const taskLines = [
+          `- Statut : ${task.status}`,
+          `- Priorité : ${task.priority}`,
+          `- Assigné à : ${task.assigned_usernames || task.assigned_to?.join(', ') || 'Non assigné'}`,
+          `- Date de création : ${formatDate(task.created_at)}`,
+          `- Échéance : ${task.due_date ? formatDate(task.due_date) : 'Non spécifiée'}`,
+          `- Description : ${task.description || 'Aucune description'}`,
+          `- Note d'assignation : ${task.assignment_note || 'Aucune note'}`,
+          task.file_path ? `- Fichier joint : ${task.file_path}` : null
+        ];
+        taskLines.filter(Boolean).forEach(line => {
+          doc.text(line, marginLeft + 6, yPosition);
+          yPosition += 6;
+        });
+  
+        yPosition += 4;
+      });
+    } else {
+      doc.text('Aucune tâche enregistrée pour ce workflow.', marginLeft, yPosition);
+      yPosition += 12;
+    }
+  
+    // 📌 Section 4 - Conclusion
+    yPosition += 5;
+    doc.setFontSize(14);
+    doc.text('4. Conclusion', marginLeft, yPosition);
+    yPosition += 8;
+    doc.setFontSize(12);
+  
+    const conclusion = `
+  Le présent document atteste de la validation officielle du workflow mentionné, selon les critères établis. Il peut être utilisé comme preuve en cas d’audit ou de contrôle de conformité interne.`;
+  
+    const splitConclusion = doc.splitTextToSize(conclusion, 180);
+    doc.text(splitConclusion, marginLeft, yPosition);
+  
+    // 💾 Sauvegarde
+    doc.save(`rapport_${archive.document_id}_${format(parseISO(archive.completed_at), 'yyyy-MM-dd')}.pdf`);
   };
-
-  // Export complet des données
+  // Export all to CSV
   const exportAllToCSV = () => {
     const headers = ['ID', 'Document', 'Workflow', 'Date achèvement', 'Statut'];
     const csvContent = [
@@ -121,7 +252,7 @@ const ArchivePage = () => {
     element.click();
   };
 
-  // Fonction de restauration
+  // Restore archive
   const restoreArchive = async (archiveId) => {
     if (window.confirm('Voulez-vous vraiment restaurer ce workflow?')) {
       try {
@@ -143,7 +274,6 @@ const ArchivePage = () => {
         <Card.Header className="d-flex justify-content-between align-items-center flex-wrap">
           <div className="d-flex align-items-center mb-2 mb-md-0">
             <h4 className="mb-0 me-3">Archives des Workflows</h4>
-            <Badge bg="secondary" pill>{archives.length} résultats</Badge>
           </div>
           
           <div className="d-flex flex-wrap gap-2">
@@ -209,8 +339,9 @@ const ArchivePage = () => {
             </div>
           ) : (
             <>
-              <div className="table-responsive">
-                <Table striped hover className="mb-0">
+              <div className="table-responsive" style={{ overflow: 'visible', position: 'relative' }}>
+
+                <Table striped hover>
                   <thead>
                     <tr>
                       <th onClick={() => requestSort('document_id')} className="cursor-pointer">
@@ -222,7 +353,6 @@ const ArchivePage = () => {
                       <th onClick={() => requestSort('completed_at')} className="cursor-pointer">
                         Date {sortConfig.key === 'completed_at' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
                       </th>
-                      <th>Rapport</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
@@ -233,23 +363,27 @@ const ArchivePage = () => {
                         <td>{archive.name}</td>
                         <td>{format(parseISO(archive.completed_at), 'PP', { locale: fr })}</td>
                         <td>
-                          <Badge bg={archive.validation_report ? 'success' : 'secondary'}>
-                            {archive.validation_report ? 'Disponible' : 'Aucun'}
-                          </Badge>
-                        </td>
-                        <td>
-                          <div className="d-flex gap-2">
+                          <div className="d-flex gap-2 align-items-center flex-wrap">
                             <Button variant="outline-primary" size="sm" onClick={() => {
                               setSelectedArchive(archive);
                               setShowModal(true);
+                            }} style={{ 
+                              zIndex: 9999, 
+                              position: 'absolute', 
+                              right: 135
                             }}>
                               Détails
                             </Button>
-                            <Dropdown>
+                            <Dropdown  style={{ 
+    zIndex: 9999, 
+    position: 'absolute', 
+    right: 70
+  }}
+      >
                               <Dropdown.Toggle variant="outline-secondary" size="sm" id="dropdown-actions" >
                                 Plus
                               </Dropdown.Toggle>
-                              <Dropdown.Menu style={{ zIndex: 1050, width: '100%' }}>
+                              <Dropdown.Menu>
                                 <Dropdown.Item onClick={() => downloadReport(archive, 'txt')}>
                                   <FiDownload className="me-2" /> Télécharger (TXT)
                                 </Dropdown.Item>
@@ -269,7 +403,7 @@ const ArchivePage = () => {
                   </tbody>
                 </Table>
               </div>
-              
+              <br/>
               <div className="d-flex justify-content-between align-items-center mt-3">
                 <div className="text-muted">
                   Affichage de {Math.min(archives.length, itemsPerPage)} sur {archives.length} archives
@@ -333,42 +467,7 @@ const ArchivePage = () => {
                         <FiDownload className="me-1" /> Télécharger
                       </Button>
                     </Card.Header>
-                    <Card.Body>
-                      <pre style={{ whiteSpace: 'pre-wrap' }}>
-                        {selectedArchive.validation_report || 'Aucun rapport disponible'}
-                      </pre>
-                    </Card.Body>
                   </Card>
-                </div>
-              </Tab>
-              <Tab eventKey="stats" title="Statistiques">
-                <div className="mt-3">
-                  <h5>Statistiques du workflow</h5>
-                  <div className="row mt-3">
-                    <div className="col-md-6">
-                      <Card className="mb-3">
-                        <Card.Body>
-                          <h6 className="text-muted">Tâches</h6>
-                          <h3>
-                            {selectedArchive.stats.completed_tasks} / {selectedArchive.stats.total_tasks}
-                            <small className="text-muted ms-2">
-                              ({selectedArchive.stats.completion_rate}%)
-                            </small>
-                          </h3>
-                        </Card.Body>
-                      </Card>
-                    </div>
-                    <div className="col-md-6">
-                      <Card className="mb-3">
-                        <Card.Body>
-                          <h6 className="text-muted">Durée</h6>
-                          <h3>
-                            {selectedArchive.stats.workflow_duration} jours
-                          </h3>
-                        </Card.Body>
-                      </Card>
-                    </div>
-                  </div>
                 </div>
               </Tab>
             </Tabs>

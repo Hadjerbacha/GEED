@@ -178,7 +178,7 @@ async function initializeDatabase() {
 
 // GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
-  const userId = req.user.id; // récupéré depuis le token
+  const userId = req.user.id;
 
   try {
     const result = await pool.query(
@@ -189,9 +189,9 @@ router.get('/', auth, async (req, res) => {
       LEFT JOIN document_collections dc ON dc.document_id = d.id
       WHERE 
       d.is_archived = false AND
-      dp.access_type = 'public'
+      (dp.access_type = 'public'
       OR (dp.user_id = $1 AND dp.access_type = 'custom')
-      OR ( dp.user_id = $1 AND dp.access_type = 'read')
+      OR (dp.user_id = $1 AND dp.access_type = 'read'))
       ORDER BY d.date DESC;
       `,
       [userId]

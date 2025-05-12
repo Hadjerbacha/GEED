@@ -117,6 +117,11 @@ const Navbar = () => {
       icon: <FaIcons.FaChartBar />,
     },
     {
+      title: 'Journal d\'activité',
+      path: '/activites',
+      icon: <FaIcons.FaHistory />,
+    },
+    {
       title: 'Archive',
       path: currentUser?.role === 'admin' ? '/archiveadmin' : '/archive',
       icon: <FaIcons.FaArchive />,
