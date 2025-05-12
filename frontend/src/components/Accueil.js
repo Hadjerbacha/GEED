@@ -259,7 +259,7 @@ const Accueil = () => {
           <EnhancedCard
             title="Workflows en Retard"
             items={lateWorkflows}
-            onClick={() => navigate("/workflows")}
+            onClick={() => navigate("/workflow")}
             type="workflow"
             icon={faClock}
             color="#e74a3b"
