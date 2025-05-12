@@ -18,6 +18,8 @@ const aiRoutes = require("./routes/ai");
 const reclamationRoutes = require('./routes/reclamation');
 const statsRoutes = require('./routes/stats');
 const summarizeRoute = require('./routes/summarize');
+const { router: activityRoutes, logActivity } = require('./routes/activite');
+
 
 
 
@@ -54,6 +56,7 @@ app.use('/api/workflow', workRoutes);
 app.use('/api/reclamations', reclamationRoutes);
 app.use('/api/', aiRoutes);
 app.use('/api/summarize', summarizeRoute);
+app.use('/api/activities', activityRoutes);
 // Lancement du serveur
 app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 

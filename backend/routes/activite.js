@@ -5,12 +5,12 @@ const jwt = require('jsonwebtoken');
 
 // Configuration de la base de données
 const pool = new Pool({
-  user: 'your_db_user',
-  host: 'localhost',
-  database: 'ged',
-  password: 'your_db_password',
-  port: 5432,
-});
+    user: process.env.PG_USER || 'postgres',
+    host: process.env.PG_HOST || 'localhost',
+    database: process.env.PG_DATABASE || 'ged',
+    password: process.env.PG_PASSWORD || 'hadjer',
+    port: process.env.PG_PORT || 5432,
+  });
 
 // Middleware d'authentification
 const authenticateToken = (req, res, next) => {
