@@ -314,85 +314,53 @@ router.get('/:id/logs', authMiddleware, async (req, res) => {
 });
 
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
-
+// Exemple : POST /api/workflows/:id/generate-tasks
 router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
   const workflowId = req.params.id;
-  const today = new Date(); // Date actuelle pour référence
 
   try {
     const { prompt } = req.body;
+
     if (!prompt) {
       return res.status(400).json({ error: "Prompt requis pour générer les tâches." });
     }
 
-    // 1. Prompt amélioré avec contraintes de dates
-    const constrainedPrompt = `
-      Génère un tableau JSON de tâches basé sur la description suivante.
-      Règles strictes :
-      - Format : [{ "title": string, "description": string, "due_date": "YYYY-MM-DD" }]
-      - Toutes les dates (due_date) doivent être FUTURES (après ${today.toISOString().split('T')[0]})
-      - Si aucune date n'est logique, mettre "due_date": null
-      
-      Description: ${prompt}
-
-      Exemple de sortie valide :
-      [{
-        "title": "Révision contrat",
-        "description": "Vérifier les clauses 5 et 8",
-        "due_date": "2024-12-15"
-      }]
-    `;
-
-    // 2. Appel à Gemini
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    const result = await model.generateContent(constrainedPrompt);
+    const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
 
-    // 3. Nettoyage et validation
+    // Nettoyage du texte Gemini (enlève ```json et ```)
     const cleanedText = text.replace(/```json|```/g, "").trim();
+
+    // Parsing JSON
     let tasks = [];
-    
     try {
       tasks = JSON.parse(cleanedText);
-      
-      // Validation des dates
-      tasks = tasks.map(task => {
-        if (task.due_date) {
-          const taskDate = new Date(task.due_date);
-          if (taskDate < today) {
-            console.warn(`Date corrigée : ${task.due_date} -> null (date passée)`);
-            return { ...task, due_date: null };
-          }
-        }
-        return task;
-      });
     } catch (err) {
       console.error("Erreur de parsing JSON:", err);
       return res.status(500).json({ error: "Réponse mal formatée par Gemini." });
     }
 
-    // 4. Insertion en base
+    // Insertion dans la base PostgreSQL
     const insertedTasks = [];
+
     for (const task of tasks) {
       const { title, description, due_date } = task;
+
       const result = await pool.query(
         `INSERT INTO tasks (title, description, due_date, workflow_id)
          VALUES ($1, $2, $3, $4) RETURNING *`,
         [title, description || "", due_date || null, workflowId]
       );
+
       insertedTasks.push(result.rows[0]);
     }
 
-    res.status(201).json({ 
-      message: "Tâches générées avec succès.",
-      tasks: insertedTasks,
-      warnings: tasks.filter(t => !t.due_date).map(t => `"${t.title}" sans date valide`)
-    });
-
+    res.status(201).json({ message: "Tâches générées et enregistrées avec succès.", tasks: insertedTasks });
   } catch (error) {
-    console.error("Erreur lors de la génération :", error);
-    res.status(500).json({ error: "Erreur serveur." });
+    console.error("Erreur lors de la génération ou insertion :", error);
+    res.status(500).json({ error: "Erreur serveur lors de la génération de tâches." });
   }
 });
 
@@ -675,7 +643,7 @@ router.post('/:id/archive', authMiddleware, async (req, res) => {
     if (existingArchive.rowCount > 0) {
       return res.status(400).json({ error: 'Ce workflow est déjà archivé' });
     }
-
+    
     // 1. Vérifier que le workflow est terminé
     const workflowRes = await pool.query(
       'SELECT * FROM workflow WHERE id = $1 AND status = $2',
