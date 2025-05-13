@@ -78,7 +78,7 @@ const Accueil = () => {
     // Récupérer les documents récents
     axios.get("http://localhost:5000/api/documents/", config)
       .then(res => setRecentDocuments(res.data.slice(0, 5)))
-      .catch(err => console.error("Erreur documents :", err));
+      .catch(err => console.error("Erreur documents :", err)); 
 
     // Récupérer les tâches assignées
     axios.get("http://localhost:5000/api/tasks/mes-taches", config)
