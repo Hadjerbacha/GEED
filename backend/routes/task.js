@@ -362,7 +362,7 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
     console.error("Erreur lors de la génération ou insertion :", error);
     res.status(500).json({ error: "Erreur serveur lors de la génération de tâches." });
   }
-});
+}); 
 
 // Route pour analyser les logs avec Gemini
   router.post('/:id/analyze-logs', authMiddleware, async (req, res) => {
@@ -634,6 +634,16 @@ router.post('/:id/archive', authMiddleware, async (req, res) => {
   const { validation_report } = req.body;
 
   try {
+     // Vérifier si déjà archivé
+     const existingArchive = await pool.query(
+      'SELECT * FROM workflow_archive WHERE workflow_id = $1',
+      [id]
+    );
+    
+    if (existingArchive.rowCount > 0) {
+      return res.status(400).json({ error: 'Ce workflow est déjà archivé' });
+    }
+    
     // 1. Vérifier que le workflow est terminé
     const workflowRes = await pool.query(
       'SELECT * FROM workflow WHERE id = $1 AND status = $2',

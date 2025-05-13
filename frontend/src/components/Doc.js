@@ -75,17 +75,22 @@ const Doc = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
 
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      try {
-        const { id } = jwtDecode(token);
-        setUserId(id);
-      } catch (e) {
-        console.error('Token invalide:', e);
-      }
+// Ajoutez ce state en haut du composant
+const [userRole, setUserRole] = useState('');
+
+// Modifiez le useEffect pour récupérer le rôle
+useEffect(() => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      const { id, role } = jwtDecode(token);
+      setUserId(id);
+      setUserRole(role);
+    } catch (e) {
+      console.error('Token invalide:', e);
     }
-  }, []);
+  }
+}, []);
 
   const openShareModal = (doc) => {
     setDocToShare(doc);
@@ -739,18 +744,19 @@ const Doc = () => {
                           <i className="bi bi-trash"></i>
                         </Button>
 
-                        <Button variant="light" onClick={() => openShareModal(doc)}>
+                        <Button variant="light" size="sm" onClick={() => openShareModal(doc)}>
                           <img src={shareIcon} width="20" alt="Partager" />
                         </Button>
+                        {(doc.owner_id === userId || userRole === 'admin') && (
                         <Button
                           variant="dark"
                           size="sm"
                           className="ms-2"
-                          title="Démarrer le workflow"
                           onClick={() => handleOpenConfirm(doc)}
                         >
                           <i className="bi bi-play-fill me-1"></i>
                         </Button>
+                      )}
                       </td>
                     </tr>
                   )) : (

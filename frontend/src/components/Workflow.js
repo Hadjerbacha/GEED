@@ -352,14 +352,6 @@ const [selectedWorkflowName, setSelectedWorkflowName] = useState('');
   style={{ maxWidth: '250px' }}
   aria-label="Description du workflow"
 />
-<Button
-  className="mt-2"
-  variant="info"
-  onClick={() => suggestDescription(newWorkflow.name)}
-  disabled={aiSuggestionLoading || !newWorkflow.name.trim()}
->
-  {aiSuggestionLoading ? 'Chargement...' : 'Suggérer via IA'}
-</Button>
 <Form.Control
   type="date"
   value={newWorkflow.echeance}

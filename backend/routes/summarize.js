@@ -1,45 +1,44 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const authMiddleware = require('../middleware/authMiddleware');
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-router.post('/', async (req, res) => {
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+
+// Nouvelle route pour le résumé
+router.post('/', authMiddleware, async (req, res) => {
   const { text } = req.body;
 
-  if (!text || typeof text !== 'string') {
-    return res.status(400).json({ error: 'Texte requis pour le résumé.' });
+  if (!text) {
+    return res.status(400).json({ error: "Texte requis pour le résumé." });
   }
 
-  const MAX_TEXT_LENGTH = 2000; // Limite de caractères
-  let cleanedText = text.trim(); // Supprimer les espaces au début et à la fin
-
-  // Nettoyer les caractères de contrôle (comme \r, \n, \t, etc.)
-  cleanedText = cleanedText.replace(/[\x00-\x1F\x7F-\x9F]/g, ''); // Enlève les caractères non imprimables
-
-  // Remplacer les retours à la ligne par des espaces pour uniformiser le texte
-  cleanedText = cleanedText.replace(/(\r\n|\n|\r)/gm, ' ').replace(/[\t\n\r\f\v]/g, ' ');
-
-  // Limiter la longueur du texte pour éviter de dépasser les limites
-  const truncatedText = cleanedText.length > MAX_TEXT_LENGTH ? cleanedText.slice(0, MAX_TEXT_LENGTH) : cleanedText;
-
   try {
-    // Requête API avec texte propre et limité
-    const response = await axios.post(
-      `https://generativelanguage.googleapis.com/v1beta2/models/text-bison-001:generateText?key=${process.env.GOOGLE_API_KEY}`,
-      {
-        prompt: `Résumé ce texte : ${truncatedText}`, // Texte nettoyé
-        temperature: 0.7,
-        maxOutputTokens: 150, // Nombre maximum de tokens à générer
-        topP: 0.9, // Paramètre d'échantillonnage
-        topK: 40, // Paramètre d'échantillonnage
-      },
-      { headers: { 'Content-Type': 'application/json' } }
-    );
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    // Prompt optimisé pour le résumé en français
+    const prompt = `
+      Tu es un expert en résumé de documents. Résume le texte suivant en français de manière concise (3-5 phrases max).
+      Concentre-toi sur les idées principales et les données clés. Évite les détails superflus.
+      
+      Texte à résumer:
+      ${text}
+    `;
 
-    const summary = response.data?.candidates?.[0]?.content; // Récupération du résumé
-    res.json({ summary });
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const summary = response.text();
+
+    // Nettoyage du résultat
+    const cleanedSummary = summary
+      .replace(/```/g, '')  // Supprime les backticks
+      .trim();
+
+    res.status(200).json({ summary: cleanedSummary });
   } catch (error) {
-    console.error('Erreur API:', error.response?.data || error.message);
-    res.status(500).json({ error: 'Erreur avec l\'API Google', details: error.response?.data });
+    console.error("Erreur Gemini:", error);
+    res.status(500).json({ error: "Erreur lors de la génération du résumé." });
   }
 });
 

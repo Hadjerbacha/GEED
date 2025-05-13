@@ -17,8 +17,13 @@ const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
 const reclamationRoutes = require('./routes/reclamation');
 const statsRoutes = require('./routes/stats');
+<<<<<<< HEAD
 const dossierRoutes = require('./routes/dossier'); // Assure-toi que le chemin est correct
 
+=======
+const summarizeRoute = require('./routes/summarize');
+const { router: activityRoutes, logActivity } = require('./routes/activite');
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 
 
 
@@ -38,8 +43,8 @@ app.use(express.json());
 app.use('/uploads', express.static('uploads'));
 app.use(express.urlencoded({ extended: true }));
 app.use('/api', statsRoutes);
-const summarizeRoute = require('./routes/summarize');
-app.use('/api/summarize', summarizeRoute);
+
+
 
 
 
@@ -56,7 +61,8 @@ app.use('/api/notifications', notifRoutes);
 app.use('/api/workflow', workRoutes);
 app.use('/api/reclamations', reclamationRoutes);
 app.use('/api/', aiRoutes);
-
+app.use('/api/summarize', summarizeRoute);
+app.use('/api/activities', activityRoutes);
 // Lancement du serveur
 app.listen(PORT, () => console.log(`🚀 Serveur lancé sur le port ${PORT}`));
 

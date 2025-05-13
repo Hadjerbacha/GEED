@@ -43,11 +43,58 @@ const upload = multer({
 
 function classifyText(text) {
   const lower = text.toLowerCase();
-  if (lower.includes('facture') || lower.includes('bon') || lower.includes('montant')) return 'facture';
-  if (lower.includes('curriculum vitae') || lower.includes('cv') || lower.includes('expérience')) return 'cv';
-  if (lower.includes('contrat') || lower.includes('accord')) return 'contrat';
-  if (lower.includes('rapport') || lower.includes('analyse')) return 'rapport';
-  return 'autre';
+  
+  // Système de scoring pour éviter le biais du "premier match"
+  const categoryScores = {
+    'contrat': 0,
+    'rapport': 0,
+    'mémoire': 0,
+    'présentation': 0,
+    'note interne': 0,
+    'facture': 0,
+    'cv': 0,
+    'photo': 0,
+  };
+
+  // Règles de scoring par catégorie (plus il y a de mots-clés, plus le score est élevé)
+  const rules = {
+    'contrat': ['contrat', 'accord', 'article', 'clause', 'signature', 'parties'],
+    'rapport': ['rapport', 'analyse', 'résumé', 'conclusion', 'recommandation', 'données'],
+    'mémoire': ['mémoire', 'thèse', 'recherche', 'chapitre', 'bibliographie', 'hypothèse', 'matière'],
+    'présentation': ['présentation', 'diapositive', 'slide', 'powerpoint', 'ppt', 'keynote'],
+    'note interne': ['note', 'memo', 'interne', 'information', 'circulaire', 'compte-rendu'],
+    'facture': ['facture', 'bon', 'montant', 'fournisseur', '€', 'euro', 'total à payer', 'tva'],
+    'cv': ['curriculum vitae', 'cv', 'expérience', 'compétence', 'formation', 'diplôme'],
+    'photo': ['photo', 'image', 'photographie', 'selfie', 'insta', 'snap', 'pixel', 'camera'],
+  };
+
+  // Calcul des scores
+  for (const [category, keywords] of Object.entries(rules)) {
+    keywords.forEach(keyword => {
+      if (lower.includes(keyword)) {
+        categoryScores[category] += 1; // +1 point par mot-clé trouvé
+      }
+    });
+  }
+
+  // Détection spéciale pour les photos (OCR + texte court)
+  if (lower.split(/\s+/).length < 10 || /(photo|image|insta|snap|pixel)/.test(lower)) {
+    categoryScores['photo'] += 3; // Bonus pour les photos
+  }
+
+  // Trouver la catégorie avec le score le plus élevé
+  let bestCategory = 'autre';
+  let highestScore = 0;
+
+  for (const [category, score] of Object.entries(categoryScores)) {
+    if (score > highestScore) {
+      highestScore = score;
+      bestCategory = category;
+    }
+  }
+
+  // Seuil minimal pour éviter les faux positifs (ex: "article" seul ne signifie pas forcément "contrat")
+  return highestScore >= 2 ? bestCategory : 'autre';
 }
 
 // GET : récupérer les utilisateurs ayant accès à un document spécifique
@@ -76,6 +123,7 @@ async function initializeDatabase() {
     // Table pour les documents
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
+<<<<<<< HEAD
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   file_path TEXT NOT NULL,
@@ -89,6 +137,19 @@ async function initializeDatabase() {
   original_id INTEGER,
   ocr_text TEXT,
   date TIMESTAMP DEFAULT NOW()
+=======
+      id SERIAL PRIMARY KEY,
+      name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      category TEXT,
+      text_content TEXT,
+      owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      visibility VARCHAR(20) DEFAULT 'private',
+      date TIMESTAMP DEFAULT NOW(),
+      is_archived BOOLEAN DEFAULT FALSE,
+    version INTEGER DEFAULT 1,
+    original_id INTEGER
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 );
 
 
@@ -134,6 +195,7 @@ async function initializeDatabase() {
 
 router.get('/', auth, async (req, res) => {
   const userId = req.user.id;
+<<<<<<< HEAD
   const isAdmin = req.user.role === 'admin'; // Adapte si nécessaire
 
   try {
@@ -164,6 +226,25 @@ router.get('/', auth, async (req, res) => {
         [userId]
       );
     }
+=======
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
+      FROM documents d
+      JOIN document_permissions dp ON dp.document_id = d.id
+      LEFT JOIN document_collections dc ON dc.document_id = d.id
+      WHERE 
+      d.is_archived = false AND
+      (dp.access_type = 'public'
+      OR (dp.user_id = $1 AND dp.access_type = 'custom')
+      OR (dp.user_id = $1 AND dp.access_type = 'read'))
+      ORDER BY d.date DESC;
+      `,
+      [userId]
+    );
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -171,6 +252,11 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
+<<<<<<< HEAD
+=======
+
+// upload document
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 router.post('/', auth, upload.single('file'), async (req, res) => {
   let { name, access, allowedUsers, summary, tags, prio } = req.body;
   summary = summary || '';
@@ -371,7 +457,7 @@ router.get('/:id', auth, async (req, res) => {
       SELECT d.*, dp.access_type
       FROM documents d
       JOIN document_permissions dp ON dp.document_id = d.id
-      WHERE d.id = $1 AND (dp.access_type = 'public' OR dp.user_id = $2 OR dp.access_type = 'custom')
+      WHERE d.id = $1 AND (dp.access_type = 'public' OR dp.user_id = $2 OR dp.access_type = 'custom') AND d.is_archived = false
     `, [id, userId]);
 
     if (result.rows.length === 0) {

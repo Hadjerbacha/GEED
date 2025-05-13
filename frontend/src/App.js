@@ -30,7 +30,12 @@ import ReclamationList from './components/ReclamationList';
 import DocVoir from './components/DocVoir';
 import DocumentVersion from './components/DocumentVersion'; 
 import Archive from './components/Archive';
+<<<<<<< HEAD
 import 'bootstrap/dist/css/bootstrap.min.css';
+=======
+import Activite from './components/historique';
+
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 
 function App() {
   return (
@@ -68,6 +73,7 @@ function App() {
           <Route path="/docvoir/:id" element={<ProtectedRoute element={<DocVoir />} />} />
          <Route path="/document/:id/versions" element={<ProtectedRoute element={<DocumentVersion />} />} />
           <Route path="/archive" element={<ProtectedRoute element={<Archive />} />} />
+          <Route path="/activites" element={<ProtectedRoute element={<Activite />} />} />
         </Routes>
       </Container>
     </Router>
