@@ -17,8 +17,13 @@ const workRoutes = require("./routes/work");
 const aiRoutes = require("./routes/ai");
 const reclamationRoutes = require('./routes/reclamation');
 const statsRoutes = require('./routes/stats');
+<<<<<<< HEAD
+const dossierRoutes = require('./routes/dossier'); // Assure-toi que le chemin est correct
+
+=======
 const summarizeRoute = require('./routes/summarize');
 const { router: activityRoutes, logActivity } = require('./routes/activite');
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 
 
 
@@ -45,6 +50,7 @@ app.use('/api', statsRoutes);
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use('/api', dossierRoutes);
 app.use("/api/documents", docsRoutes);
 app.use("/api/tasks", tasksRoutes);
 app.use("/api/collection",collectionRoutes);

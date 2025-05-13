@@ -10,13 +10,18 @@ import shareIcon from './img/share.png';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'react-toastify';
 import { FaCloudUploadAlt } from 'react-icons/fa';
+import Tesseract from 'tesseract.js';
+import { getDocument } from 'pdfjs-dist/webpack'; // Importer getDocument depuis pdfjs-dist
+
+
+
 
 const Doc = () => {
+  const [errorMessage, setErrorMessage] = useState('');
   const [documents, setDocuments] = useState([]);
   const [savedDocuments, setSavedDocuments] = useState([]);
   const [pendingName, setPendingName] = useState('');
   const [pendingFile, setPendingFile] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('Tous les documents');
   const [startDate, setStartDate] = useState('');
@@ -48,6 +53,15 @@ const Doc = () => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [existingWorkflow, setExistingWorkflow] = useState(null);
+  const categories = ['Contrat', 'Mémoire', 'Article', 'Rapport'];
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [summary, setSummary] = useState('');
+  const [access, setAccess] = useState('private');
+  const [selectedUsers, setSelectedUsers] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+
+
   const [formData, setFormData] = useState({
     documentName: '',
     category: '',
@@ -147,65 +161,132 @@ useEffect(() => {
       return;
     }
 
+    let extractedText = '';
+
+    try {
+      // Vérifier si le fichier est une image ou un PDF
+      if (pendingFile.type.startsWith('image/')) {
+        // Si c'est une image, applique l'OCR
+        const imageUrl = URL.createObjectURL(pendingFile);
+        const result = await Tesseract.recognize(imageUrl, 'eng', {
+          logger: m => console.log(m), // Pour le debug
+        });
+        extractedText = result.data.text;
+        console.log('Texte OCR extrait de l\'image :', extractedText);
+      } else if (pendingFile.type === 'application/pdf') {
+        // Si c'est un PDF, extraire les pages et appliquer l'OCR sur chaque image
+        extractedText = await processPDFOCR(pendingFile);
+      } else {
+        setErrorMessage('Fichier non supporté.');
+        return;
+      }
+
+      // Vérifier si un document avec ce contenu existe déjà
+      const existingContent = documents.find(d => d.text_content === extractedText);
+      if (existingContent && !forceUpload) {
+        setErrorMessage('Un document avec un contenu similaire existe déjà.');
+        return; // Stop ici si doublon de contenu
+      }
+
+    } catch (ocrErr) {
+      console.error('Erreur OCR :', ocrErr);
+      setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
+      return;
+    }
+
+    // Vérifier si le nom du fichier existe déjà
     const existingDoc = documents.find(d => d.name === pendingName);
-  
     if (existingDoc && !forceUpload) {
       setConflictingDocName(pendingName);
       setShowConflictPrompt(true);
       return;
     }
 
+    // Vérifier la taille du fichier
     if (pendingFile.size > 10 * 1024 * 1024) {
       setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
       return;
     }
 
-    await uploadNewDocument();
+    // Si tout est bon, procéder à l'upload du document
+    await uploadNewDocument(extractedText);
   };
-  
-  const uploadNewDocument = async () => {
+
+  // Fonction pour traiter un PDF et extraire le texte de ses pages
+  const processPDFOCR = async (pdfFile) => {
+    let extractedText = '';
+    try {
+      const pdfUrl = URL.createObjectURL(pdfFile);
+      const pdf = await getDocument(pdfUrl).promise;  // Utiliser getDocument
+      // Extraire les pages en images et appliquer l'OCR sur chaque image
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const viewport = page.getViewport({ scale: 1.5 });
+
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+        // Appliquer l'OCR sur l'image de la page
+        const result = await Tesseract.recognize(canvas.toDataURL(), 'eng', {
+          logger: m => console.log(m),
+        });
+
+        extractedText += result.data.text;
+        console.log(`Texte OCR extrait de la page ${pageNum}:`, result.data.text);
+      }
+    } catch (ocrErr) {
+      console.error('Erreur OCR sur le PDF :', ocrErr);
+      setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
+      return '';
+    }
+    return extractedText;
+  };
+
+  // Fonction pour l'upload du document
+  const uploadNewDocument = async (extractedText) => {
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
+    formData.append('text_content', extractedText);
+    formData.append('summary', description);
+    formData.append('tags', tags);
     formData.append('access', accessType);
-    formData.append('collectionName', collectionName);
-    formData.append('description', description);
-    formData.append('priority', priority);
-    formData.append('tags', JSON.stringify(tags));
+    formData.append('prio', priority);
 
-    if (accessType === 'custom' && allowedUsers && allowedUsers.length > 0) {
-      formData.append('allowedUsers', JSON.stringify(allowedUsers));
+    if (access === 'custom') {
+      selectedUsers.forEach(userId => formData.append('allowedUsers[]', userId));
     }
-  
+
     try {
-      const res = await fetch('http://localhost:5000/api/documents/', {
-        method: 'POST',
+      const res = await axios.post('http://localhost:5000/api/documents/', formData, {
         headers: {
           Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',
         },
-        body: formData,
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          setUploadProgress(percent); // ← ici tu mets à jour l'état
+        },
       });
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || `Erreur: ${res.status}`);
-      }
-
-      const newDoc = await res.json();
+      const newDoc = res.data;
       setDocuments([newDoc, ...documents]);
 
+      // Reset
       setPendingFile(null);
       setPendingName('');
-      setCollectionName('');
-      setForceUpload(false);
-      setShowConflictPrompt(false);
-      setConflictingDocName('');
+      setUploadProgress(0); // reset la barre
       setErrorMessage(null);
-      setShowUploadForm(false);
-
+      setConflictingDocName('');
+      setShowConflictPrompt(false);
     } catch (err) {
       console.error('Erreur lors de l\'upload du document:', err);
-      setErrorMessage(err.message || 'Erreur lors de l\'envoi du document.');
+      setErrorMessage(err.response?.data?.error || 'Erreur lors de l\'envoi du document.');
+      setUploadProgress(0);
     }
   };
 
@@ -217,17 +298,17 @@ useEffect(() => {
     formData.append('description', description);
     formData.append('priority', priority);
     formData.append('tags', JSON.stringify(tags));
-  
+
     try {
       const res = await fetch(`http://localhost:5000/api/documents/${documentId}/versions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-  
+
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Erreur inconnue");
-  
+
       alert("Nouvelle version ajoutée !");
       setForceUpload(false);
       setShowConflictPrompt(false);
@@ -238,7 +319,7 @@ useEffect(() => {
       setErrorMessage(err.message || 'Erreur lors de l\'ajout de la version.');
     }
   };
-  
+
   const resetForm = () => {
     setPendingFile(null);
     setPendingName('');
@@ -271,41 +352,67 @@ useEffect(() => {
   // Étape 2 : Appliquer les filtres existants sur ces derniers documents
   const filteredDocuments = latestDocuments.filter(doc => {
     const docName = doc.name || '';
+    const docFilePath = doc.file_path || ''; // Utilisation de file_path pour extraire l'extension
     const docDate = doc.date ? new Date(doc.date) : null;
     const docContent = doc.text_content || '';
+    const docCategory = doc.category || '';
+    const docSummary = doc.summary || '';
+    const docDescription = doc.description || ''; // Ajout description
+    const docTags = Array.isArray(doc.tags) ? doc.tags : [];
+    const docFolder = doc.folder || ''; // Si tu as un dossier associé au document
+    const docAuthor = doc.author || ''; // Si tu as un auteur associé au document
 
-    const matchesType = filterType === 'Tous les documents' || docName.endsWith(filterType);
+    // Extraire l'extension du fichier à partir du chemin complet
+    const fileExtension = docFilePath.split('.').pop().toLowerCase(); // Extraire l'extension du fichier depuis le chemin
+
+    // Filtrer selon le type du document (extension)
+    const matchesType = filterType === 'Tous les documents' ||
+      fileExtension === filterType.toLowerCase();  // Comparer sans le point dans filterType
+
     const matchesDate = (!startDate || docDate >= new Date(startDate)) && (!endDate || docDate <= new Date(endDate));
 
+    // Recherche avancée avec ajout de la description et d'autres champs possibles
     const matchesSearch = useAdvancedFilter
-      ? docContent.toLowerCase().includes(searchQuery.toLowerCase())
+      ? (
+        docContent.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        docSummary.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        docDescription.toLowerCase().includes(searchQuery.toLowerCase()) ||  // Recherche dans la description
+        docFolder.toLowerCase().includes(searchQuery.toLowerCase()) ||  // Recherche dans le dossier
+        docAuthor.toLowerCase().includes(searchQuery.toLowerCase()) ||  // Recherche dans l'auteur
+        docTags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
       : docName.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesType && matchesDate && matchesSearch;
+    const matchesCategory = selectedCategory === '' ||
+      (doc.category && doc.category.toLowerCase() === selectedCategory.toLowerCase());
+
+    return matchesType && matchesDate && matchesSearch && matchesCategory;
   });
+
+
 
   const handleOpenConfirm = async (doc) => {
     setModalDoc(doc);
     setAutoWfName(`WF_${doc.name}`);
-    
+
     try {
       const res = await axios.get(
         `http://localhost:5000/api/workflows/document/${doc.id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       setExistingWorkflow(res.data.exists ? res.data.workflow : null);
       setShowConfirmModal(true);
-      
+
     } catch (err) {
       console.error('Erreur vérification workflow:', err);
-      
+
       if (err.response?.status === 500) {
         toast.error("Erreur serveur lors de la vérification des workflows");
       } else {
         toast.error("Erreur de connexion");
       }
-      
+
       setExistingWorkflow(null);
       setShowConfirmModal(true);
     }
@@ -372,18 +479,36 @@ useEffect(() => {
     }
   };
 
+  const handleCategoryClick = async (category) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/documents?category=${category}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Erreur : ${res.status}`);
+      const data = await res.json();
+      setDocuments(data); // Remplacer la liste actuelle par les documents filtrés
+    } catch (err) {
+      console.error('Erreur chargement catégorie :', err);
+      setErrorMessage('Impossible de charger les documents pour cette catégorie.');
+    }
+  };
+
+
   return (
     <>
       <Navbar />
       <div className="container-fluid">
         <Row className="my-3">
           <Col md={4}><Form.Control type="text" placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></Col>
-          <Col md={2}><Form.Select value={filterType} onChange={e => setFilterType(e.target.value)}>
-            <option value="Tous les documents">Tous</option>
-            <option value=".pdf">PDF</option>
-            <option value=".docx">Word</option>
-            <option value=".jpg">Images</option>
-          </Form.Select></Col>
+          <Col md={2}>
+            <Form.Select value={filterType} onChange={e => setFilterType(e.target.value)}>
+              <option value="Tous les documents">Tous</option>
+              <option value="pdf">PDF</option>
+              <option value="docx">Word</option>
+              <option value="jpg">Images</option>
+            </Form.Select>
+          </Col>
+
           <Col md={2}><Form.Control type="date" value={startDate} onChange={e => setStartDate(e.target.value)} /></Col>
           <Col md={2}><Form.Control type="date" value={endDate} onChange={e => setEndDate(e.target.value)} /></Col>
           <Col md={2}><Button variant={useAdvancedFilter ? 'danger' : 'success'} onClick={() => setUseAdvancedFilter(!useAdvancedFilter)}>
@@ -458,7 +583,8 @@ useEffect(() => {
                             value={allUsers.filter(option => allowedUsers.includes(option.value))}
                             onChange={(selectedOptions) => {
                               const selectedUserIds = selectedOptions.map(opt => opt.value);
-                              setAllowedUsers(selectedUserIds);
+                              setSelectedUsers(selectedUserIds); 
+                               setAllowedUsers(selectedUserIds);
                             }}
                             placeholder="Sélectionner des utilisateurs..."
                             className="basic-multi-select"
@@ -552,6 +678,34 @@ useEffect(() => {
                   </div>
                 )}
               </Card.Body>
+
+              <div className="d-flex gap-2 mt-3">
+                <Button
+                  key="all"
+                  variant={selectedCategory === '' ? 'secondary' : 'outline-secondary'}
+                  className="rounded-pill fw-semibold px-4 py-2 flex-grow-1 text-center"
+                  style={{ transition: 'all 0.2s ease-in-out' }}
+                  onClick={() => setSelectedCategory('')}
+                  onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+                  onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                >
+                  Toutes
+                </Button>
+
+                {categories.map(cat => (
+                  <Button
+                    key={cat}
+                    variant={selectedCategory === cat ? 'secondary' : 'outline-secondary'}
+                    className="rounded-pill fw-semibold px-4 py-2 flex-grow-1 text-center"
+                    style={{ transition: 'all 0.2s ease-in-out' }}
+                    onClick={() => setSelectedCategory(cat)}
+                    onMouseDown={(e) => e.currentTarget.style.transform = 'scale(0.97)'}
+                    onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                  >
+                    {cat}
+                  </Button>
+                ))}
+              </div>
 
               <Table striped bordered hover responsive>
                 <thead>
@@ -703,8 +857,8 @@ useEffect(() => {
                 </Alert>
                 <p><strong>Nom:</strong> {existingWorkflow.name}</p>
                 <p><strong>Statut:</strong> {existingWorkflow.status}</p>
-                <Button 
-                  variant="primary" 
+                <Button
+                  variant="primary"
                   onClick={() => {
                     setShowConfirmModal(false);
                     navigate(`/workflowz/${existingWorkflow.id}`);
@@ -734,8 +888,8 @@ useEffect(() => {
             <Button variant="secondary" onClick={() => setShowConfirmModal(false)}>
               Annuler
             </Button>
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               onClick={handleConfirmCreate}
               disabled={!!existingWorkflow}
             >

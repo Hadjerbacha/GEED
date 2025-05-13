@@ -123,6 +123,21 @@ async function initializeDatabase() {
     // Table pour les documents
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
+<<<<<<< HEAD
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  category TEXT,
+  text_content TEXT,
+  summary TEXT,               -- 🆕 Description
+  tags TEXT[],                -- 🆕 Tableau de mots-clés
+  owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  visibility VARCHAR(20) DEFAULT 'private',
+  version INTEGER DEFAULT 1,
+  original_id INTEGER,
+  ocr_text TEXT,
+  date TIMESTAMP DEFAULT NOW()
+=======
       id SERIAL PRIMARY KEY,
       name TEXT NOT NULL,
       file_path TEXT NOT NULL,
@@ -134,7 +149,9 @@ async function initializeDatabase() {
       is_archived BOOLEAN DEFAULT FALSE,
     version INTEGER DEFAULT 1,
     original_id INTEGER
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 );
+
 
     `);
 
@@ -176,9 +193,40 @@ async function initializeDatabase() {
   }
 }
 
-// GET : récupérer uniquement les documents accessibles à l'utilisateur connecté
 router.get('/', auth, async (req, res) => {
   const userId = req.user.id;
+<<<<<<< HEAD
+  const isAdmin = req.user.role === 'admin'; // Adapte si nécessaire
+
+  try {
+    let result;
+
+    if (isAdmin) {
+      // Admin : accès à tous les documents
+      result = await pool.query(`
+        SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
+        FROM documents d
+        LEFT JOIN document_collections dc ON dc.document_id = d.id
+        ORDER BY d.date DESC;
+      `);
+    } else {
+      // Utilisateur normal : documents accessibles via permissions
+      result = await pool.query(
+        `
+        SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
+        FROM documents d
+        JOIN document_permissions dp ON dp.document_id = d.id
+        LEFT JOIN document_collections dc ON dc.document_id = d.id
+        WHERE 
+          dp.access_type = 'public'
+          OR (dp.user_id = $1 AND dp.access_type = 'custom')
+          OR (dp.user_id = $1 AND dp.access_type = 'read')
+        ORDER BY d.date DESC;
+        `,
+        [userId]
+      );
+    }
+=======
 
   try {
     const result = await pool.query(
@@ -196,6 +244,7 @@ router.get('/', auth, async (req, res) => {
       `,
       [userId]
     );
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -203,10 +252,15 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
+<<<<<<< HEAD
+=======
 
 // upload document
+>>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 router.post('/', auth, upload.single('file'), async (req, res) => {
-  const { name, access, allowedUsers } = req.body;  // <-- On récupère la catégorie depuis le formulaire
+  let { name, access, allowedUsers, summary, tags, prio } = req.body;
+  summary = summary || '';
+
 
   if (!req.file) {
     return res.status(400).json({ error: 'Fichier non téléchargé' });
@@ -219,6 +273,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
 
+    // OCR ou parsing PDF
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
       const data = await pdfParse(dataBuffer);
@@ -230,9 +285,10 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
       return res.status(400).json({ error: 'Type de fichier non pris en charge pour l\'OCR' });
     }
 
-    // Petite vérification : si catégorie n’est pas envoyée par le front, on peut fallback automatiquement
-    let finalCategory = classifyText(extractedText); 
+    // Classification automatique si besoin
+    let finalCategory = classifyText(extractedText);
 
+    // Recherche d'une version existante
     const existing = await pool.query(
       'SELECT * FROM documents WHERE name = $1 ORDER BY version DESC LIMIT 1',
       [name]
@@ -244,33 +300,44 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     if (existing.rowCount > 0) {
       const latestDoc = existing.rows[0];
-      version = parseInt(latestDoc.version, 10) + 1; // ✅ Correction concaténation
+      version = parseInt(latestDoc.version, 10) + 1;
       original_id = latestDoc.original_id || latestDoc.id;
     }
 
+    // Traitement des tags
+    const parsedTags = typeof tags === 'string'
+      ? tags.split(',').map(tag => tag.trim())
+      : [];
 
-    // ➕ Nouvelle version = nouvelle ligne dans `documents`
+    // Insertion dans la table documents
     const insertQuery = `
-      INSERT INTO documents (name, file_path, category, text_content, owner_id, visibility, ocr_text, version, original_id)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *;
-    `;
+  INSERT INTO documents 
+  (name, file_path, category, text_content, owner_id, visibility,
+  ocr_text, version, original_id, summary, tags, priority)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+  RETURNING *;
+`;
+
     const insertValues = [
-      name,
-      file_path,
-      finalCategory,
-      extractedText,
-      req.user.id,
-      access,
-      extractedText,
-      version,
-      original_id
-    ];
+  name,
+  file_path,
+  finalCategory,
+  extractedText,
+  req.user.id,
+  access,
+  extractedText,
+  version,
+  original_id,
+  summary,
+  parsedTags,
+  prio
+];
+
 
     result = await pool.query(insertQuery, insertValues);
     const documentId = result.rows[0].id;
 
-    // 🔐 Gestion des permissions (uniquement à l'insertion)
+    // Gestion des permissions
     if (access === 'public') {
       const allUsers = await pool.query('SELECT id FROM users');
       await Promise.all(allUsers.rows.map(user =>
@@ -293,6 +360,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
       );
     }
 
+    // Réponse
     res.status(201).json({
       ...result.rows[0],
       preview: extractedText.slice(0, 300) + '...',
@@ -302,10 +370,12 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
   } catch (err) {
     console.error('Erreur:', err.stack);
-    if (req.file) fs.unlink(req.file.path, () => {});
+    if (req.file) fs.unlink(req.file.path, () => { });
     res.status(500).json({ error: 'Erreur lors de l\'ajout', details: err.message });
   }
 });
+
+
 
 
 
@@ -593,6 +663,49 @@ router.put('/:id/access', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
+
+// POST /api/categories
+router.post('/categories', auth, async (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: "Nom de catégorie requis" });
+
+  try {
+    const result = await pool.query(
+      'INSERT INTO categories (name) VALUES ($1) ON CONFLICT (name) DO NOTHING RETURNING *',
+      [name]
+    );
+    res.status(201).json(result.rows[0] || { message: "Catégorie déjà existante" });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+
+// POST /api/documents/check-duplicate
+router.post('/check-duplicate', async (req, res) => {
+  const { text_content } = req.body;
+  if (!text_content) return res.status(400).json({ error: 'Texte manquant' });
+
+  try {
+    const result = await pool.query(
+      'SELECT name FROM documents WHERE text_content = $1 LIMIT 1',
+      [text_content]
+    );
+
+    if (result.rows.length > 0) {
+      return res.json({ exists: true, documentName: result.rows[0].name });
+    } else {
+      return res.json({ exists: false });
+    }
+  } catch (err) {
+    console.error('Erreur lors de la vérification du doublon:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
+
 
 
 

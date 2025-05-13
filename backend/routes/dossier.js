@@ -97,6 +97,7 @@ router.delete('/folders/:id', auth, async (req, res) => {
   }
 });
 
+
 // Initialisation des tables
 initializeDatabase();
 

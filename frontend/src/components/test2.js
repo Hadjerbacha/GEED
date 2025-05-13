@@ -48,12 +48,15 @@ const Doc = () => {
   const [selectedDoc, setSelectedDoc] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState({});
-  const [categories, setCategories] = useState(['contrat', 'cv', 'facture', 'rapport', 'autre']);
+  const [newCategory, setNewCategory] = useState('');
 
   const token = localStorage.getItem('token');
   const [isSaving, setIsSaving] = useState(false);
   const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
+  const allCategories = Array.from(new Set(documents.map(doc => doc.category || predictCategory(doc.name))));
+  const categories = Array.from(new Set(documents.map(doc => doc.category).filter(Boolean)));
+
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -292,6 +295,34 @@ const Doc = () => {
     return filteredDocuments.filter(doc => doc.category === category);
   };
 
+ const handleAddNewFolder = async () => {
+  const folderName = prompt("Nom de la catégorie :");
+  if (!folderName?.trim()) return;
+
+  const token = localStorage.getItem('token');
+
+  try {
+    const body = {
+      name: `[Catégorie] ${folderName}`, // Pour bien le distinguer
+      file_path: '-',
+      category: folderName,
+      visibility: 'private',
+      is_folder: true
+    };
+
+    const res = await axios.post('http://localhost:5000/api/documents', body, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    console.log("Marqueur de catégorie ajouté :", res.data);
+    setDocuments(prev => [...prev, res.data]);
+  } catch (err) {
+    console.error("Erreur :", err.response?.data || err.message);
+    alert("Impossible d'ajouter la catégorie.");
+  }
+};
+
+
   return (
     <>
       <Navbar />
@@ -447,10 +478,25 @@ const Doc = () => {
                   </Card>
                 )}
               </Card.Body>
+              <div className="d-flex justify-content-start mb-3">
+                <Button
+                  variant="light"
+                  style={{
+                    border: '1px solid #ced4da',
+                    color: '#495057',
+                    padding: '6px 12px',
+                    fontWeight: '500'
+                  }}
+                  onClick={handleAddNewFolder}
+                >
+                  ➕ Nouveau dossier
+                </Button>
+              </div>
+
 
               <Accordion defaultActiveKey={categories[0]} alwaysOpen>
                 {categories.map(category => {
-                  const docsInCategory = getDocumentsByCategory(category);
+                  const docsInCategory = documents.filter(doc => doc.category === category);
                   if (docsInCategory.length === 0) return null;
 
                   return (
@@ -487,17 +533,30 @@ const Doc = () => {
                                 </td>
                                 <td>{doc.date ? new Date(doc.date).toLocaleString() : 'Inconnue'}</td>
                                 <td>
-                                  <Button variant="info" size="sm" className="me-2" onClick={() => navigate(`/documents/${doc.id}`)} title="Détails">
+                                  <Button
+                                    variant="info"
+                                    size="sm"
+                                    className="me-2"
+                                    onClick={() => navigate(`/documents/${doc.id}`)}
+                                    title="Détails"
+                                  >
                                     <i className="bi bi-list-ul"></i>
                                   </Button>
 
-                                  <Button variant="danger" size="sm" className="me-2" onClick={() => handleDelete(doc.id)} title="Supprimer">
+                                  <Button
+                                    variant="danger"
+                                    size="sm"
+                                    className="me-2"
+                                    onClick={() => handleDelete(doc.id)}
+                                    title="Supprimer"
+                                  >
                                     <i className="bi bi-trash"></i>
                                   </Button>
 
                                   <Button variant="light" onClick={() => openShareModal(doc)}>
                                     <img src={shareIcon} width="20" alt="Partager" />
                                   </Button>
+
                                   <Button
                                     variant="dark"
                                     size="sm"
