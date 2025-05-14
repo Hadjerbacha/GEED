@@ -30,6 +30,8 @@ const NotificationsPage = () => {
           message: `Votre demande d'accés au document ${id} a été approuvée.`,
           type: 'info',
           document_id: id,
+          decision : true ,
+          is_read : true
         });
       }
     } catch (error) {
@@ -98,13 +100,23 @@ const NotificationsPage = () => {
   };
 
   const markAsRead = async (notificationId) => {
-    try {
-      await axios.put(`http://localhost:5000/api/notifications/read/${notificationId}`);
-      fetchNotifications();
-    } catch (error) {
-      console.error('Erreur lors du marquage comme lu:', error);
-    }
-  };
+  try {
+    const response = await axios.put(`http://localhost:5000/api/notifications/read/${notificationId}`);
+
+    // Ici, tu mets à jour l'état local des notifications pour qu'elles soient actualisées
+    setNotifications((prevNotifications) =>
+      prevNotifications.map((notif) =>
+        notif.id === notificationId ? { ...notif, is_read: true } : notif
+      )
+    );
+    
+    console.log(`Notification ${notificationId} marquée comme lue`);
+  } catch (error) {
+    console.error("Erreur lors du marquage comme lue :", error);
+  }
+};
+
+
 
   useEffect(() => {
     fetch('http://localhost:5000/api/auth/users')

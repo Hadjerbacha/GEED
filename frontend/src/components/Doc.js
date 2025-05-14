@@ -59,7 +59,13 @@ const Doc = () => {
   const [access, setAccess] = useState('private');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [allGroups, setAllGroups] = useState([]);  // Liste des groupes
+  const [selectedGroup, setSelectedGroup] = useState(null); // Groupe sélectionné
+  const [category, setCategory] = useState('');
 
+
+
+  const GROUPS_API = 'http://localhost:5000/api/groups';
 
 
   const [formData, setFormData] = useState({
@@ -75,22 +81,22 @@ const Doc = () => {
   const navigate = useNavigate();
   const [userId, setUserId] = useState(null);
 
-// Ajoutez ce state en haut du composant
-const [userRole, setUserRole] = useState('');
+  // Ajoutez ce state en haut du composant
+  const [userRole, setUserRole] = useState('');
 
-// Modifiez le useEffect pour récupérer le rôle
-useEffect(() => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    try {
-      const { id, role } = jwtDecode(token);
-      setUserId(id);
-      setUserRole(role);
-    } catch (e) {
-      console.error('Token invalide:', e);
+  // Modifiez le useEffect pour récupérer le rôle
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const { id, role } = jwtDecode(token);
+        setUserId(id);
+        setUserRole(role);
+      } catch (e) {
+        console.error('Token invalide:', e);
+      }
     }
-  }
-}, []);
+  }, []);
 
   const openShareModal = (doc) => {
     setDocToShare(doc);
@@ -124,6 +130,7 @@ useEffect(() => {
   useEffect(() => {
     fetchDocuments();
     fetchUsers();
+    fetchGroups();
   }, [token]);
 
   const fetchUsers = async () => {
@@ -134,6 +141,15 @@ useEffect(() => {
       setAllUsers(formatted);
     } catch (err) {
       console.error('Erreur chargement des utilisateurs', err);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const res = await axios.get(GROUPS_API);
+      setAllGroups(res.data); // Remplir la liste des groupes
+    } catch (err) {
+      console.error('Erreur récupération groupes:', err);
     }
   };
 
@@ -156,177 +172,76 @@ useEffect(() => {
   };
 
   const handleUpload = async () => {
+    // Validation rapide
     if (!pendingFile || !pendingName) {
       setErrorMessage('Veuillez remplir tous les champs requis.');
       return;
     }
-
-    let extractedText = '';
-
-    try {
-      // Vérifier si le fichier est une image ou un PDF
-      if (pendingFile.type.startsWith('image/')) {
-        // Si c'est une image, applique l'OCR
-        const imageUrl = URL.createObjectURL(pendingFile);
-        const result = await Tesseract.recognize(imageUrl, 'eng', {
-          logger: m => console.log(m), // Pour le debug
-        });
-        extractedText = result.data.text;
-        console.log('Texte OCR extrait de l\'image :', extractedText);
-      } else if (pendingFile.type === 'application/pdf') {
-        // Si c'est un PDF, extraire les pages et appliquer l'OCR sur chaque image
-        extractedText = await processPDFOCR(pendingFile);
-      } else {
-        setErrorMessage('Fichier non supporté.');
-        return;
-      }
-
-      // Vérifier si un document avec ce contenu existe déjà
-      const existingContent = documents.find(d => d.text_content === extractedText);
-      if (existingContent && !forceUpload) {
-        setErrorMessage('Un document avec un contenu similaire existe déjà.');
-        return; // Stop ici si doublon de contenu
-      }
-
-    } catch (ocrErr) {
-      console.error('Erreur OCR :', ocrErr);
-      setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
+    if (pendingFile.size > 10 * 1024 * 1024) {
+      setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
       return;
     }
 
-    // Vérifier si le nom du fichier existe déjà
-    const existingDoc = documents.find(d => d.name === pendingName);
+    // Conflit de nom
+    const existingDoc = documents.find(doc => doc.name === pendingName);
     if (existingDoc && !forceUpload) {
       setConflictingDocName(pendingName);
       setShowConflictPrompt(true);
       return;
     }
 
-    // Vérifier la taille du fichier
-    if (pendingFile.size > 10 * 1024 * 1024) {
-      setErrorMessage('Le fichier dépasse la limite de 10 Mo.');
-      return;
-    }
-
-    // Si tout est bon, procéder à l'upload du document
-    await uploadNewDocument(extractedText);
-  };
-
-  // Fonction pour traiter un PDF et extraire le texte de ses pages
-  const processPDFOCR = async (pdfFile) => {
-    let extractedText = '';
-    try {
-      const pdfUrl = URL.createObjectURL(pdfFile);
-      const pdf = await getDocument(pdfUrl).promise;  // Utiliser getDocument
-      // Extraire les pages en images et appliquer l'OCR sur chaque image
-      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-        const page = await pdf.getPage(pageNum);
-        const viewport = page.getViewport({ scale: 1.5 });
-
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-
-        await page.render({ canvasContext: context, viewport: viewport }).promise;
-
-        // Appliquer l'OCR sur l'image de la page
-        const result = await Tesseract.recognize(canvas.toDataURL(), 'eng', {
-          logger: m => console.log(m),
-        });
-
-        extractedText += result.data.text;
-        console.log(`Texte OCR extrait de la page ${pageNum}:`, result.data.text);
-      }
-    } catch (ocrErr) {
-      console.error('Erreur OCR sur le PDF :', ocrErr);
-      setErrorMessage("Erreur pendant l'extraction du texte via OCR.");
-      return '';
-    }
-    return extractedText;
-  };
-
-  // Fonction pour l'upload du document
-  const uploadNewDocument = async (extractedText) => {
+    // Préparer le formulaire
     const formData = new FormData();
     formData.append('name', pendingName);
     formData.append('file', pendingFile);
-    formData.append('text_content', extractedText);
-    formData.append('summary', description);
-    formData.append('tags', tags);
+    formData.append('category', category);
+    formData.append('visibility', accessType);
     formData.append('access', accessType);
-    formData.append('prio', priority);
+    formData.append('collectionName', collectionName);
+    formData.append('summary', summary);         // si tu as un état React summary
+    formData.append('priority', priority);       // idem
+    formData.append('tags', JSON.stringify(tags)); // pour les tableaux
 
-    if (access === 'custom') {
-      selectedUsers.forEach(userId => formData.append('allowedUsers[]', userId));
-    }
+    if (forceUpload) formData.append('isNewVersion', 'true');
 
     try {
-      const res = await axios.post('http://localhost:5000/api/documents/', formData, {
+      // Timer de debug (facultatif)
+      const start = Date.now();
+
+      const res = await fetch('http://localhost:5000/api/documents/', {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          Authorization: `Bearer ${token}`
+          // Ne surtout pas mettre de Content-Type ici avec FormData
         },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-          setUploadProgress(percent); // ← ici tu mets à jour l'état
-        },
+        body: formData
       });
 
-      const newDoc = res.data;
-      setDocuments([newDoc, ...documents]);
+      const duration = Date.now() - start;
+      console.log(`Upload terminé en ${duration} ms`);
 
-      // Reset
+      if (!res.ok) throw new Error(`Erreur : ${res.status}`);
+      const newDoc = await res.json();
+
+      // Mise à jour
+      setDocuments(prev => [newDoc, ...prev]);
+
+      // Reset minimal
       setPendingFile(null);
       setPendingName('');
-      setUploadProgress(0); // reset la barre
-      setErrorMessage(null);
-      setConflictingDocName('');
-      setShowConflictPrompt(false);
-    } catch (err) {
-      console.error('Erreur lors de l\'upload du document:', err);
-      setErrorMessage(err.response?.data?.error || 'Erreur lors de l\'envoi du document.');
-      setUploadProgress(0);
-    }
-  };
-
-  const uploadNewVersion = async (documentId) => {
-    const formData = new FormData();
-    formData.append('file', pendingFile);
-    formData.append('documentId', documentId);
-    formData.append('collectionName', collectionName);
-    formData.append('description', description);
-    formData.append('priority', priority);
-    formData.append('tags', JSON.stringify(tags));
-
-    try {
-      const res = await fetch(`http://localhost:5000/api/documents/${documentId}/versions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      });
-
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.error || "Erreur inconnue");
-
-      alert("Nouvelle version ajoutée !");
+      setCategory('');
+      setCollectionName('');
       setForceUpload(false);
       setShowConflictPrompt(false);
-      resetForm();
+      setConflictingDocName('');
+      setErrorMessage(null);
+
     } catch (err) {
-      console.error('Erreur sauvegarde collection:', err);
-      setErrorMessage('Erreur lors de la sauvegarde des documents.');
-      setErrorMessage(err.message || 'Erreur lors de l\'ajout de la version.');
+      console.error('Erreur upload :', err);
+      setErrorMessage('Erreur lors de l\'envoi du document.');
     }
   };
 
-  const resetForm = () => {
-    setPendingFile(null);
-    setPendingName('');
-    setCollectionName('');
-    setErrorMessage(null);
-    setConflictingDocName('');
-  };
 
   const saveCollection = async () => {
     const nameToUse = selectedExistingCollection || collectionName;
@@ -571,7 +486,7 @@ useEffect(() => {
                         >
                           <option value="private">Privé</option>
                           <option value="public">Tous les utilisateurs</option>
-                          <option value="custom">Utilisateurs spécifiques</option>
+                          <option value="custom">Utilisateurs ou groupe spécifique</option>
                         </Form.Select>
                       </Col>
 
@@ -583,8 +498,8 @@ useEffect(() => {
                             value={allUsers.filter(option => allowedUsers.includes(option.value))}
                             onChange={(selectedOptions) => {
                               const selectedUserIds = selectedOptions.map(opt => opt.value);
-                              setSelectedUsers(selectedUserIds); 
-                               setAllowedUsers(selectedUserIds);
+                              setSelectedUsers(selectedUserIds);
+                              setAllowedUsers(selectedUserIds);
                             }}
                             placeholder="Sélectionner des utilisateurs..."
                             className="basic-multi-select"
@@ -592,6 +507,23 @@ useEffect(() => {
                           />
                         </Col>
                       )}
+
+                      {/* Sélectionner un groupe */}
+                      <Col md={3} className="mb-3">
+                        <Select
+                          value={selectedGroup ? { value: selectedGroup, label: allGroups.find(group => group.id === selectedGroup)?.nom } : null}
+                          options={allGroups.map(group => ({
+                            value: group.id,
+                            label: group.nom
+                          }))}
+                          onChange={(selectedOption) => {
+                            setSelectedGroup(selectedOption ? selectedOption.value : null);
+                          }}
+                          placeholder="Sélectionner un groupe..."
+                          className="basic-multi-select"
+                          classNamePrefix="select"
+                        />
+                      </Col>
 
                       <Col md={3} className="mb-3">
                         <Form.Control
@@ -748,15 +680,15 @@ useEffect(() => {
                           <img src={shareIcon} width="20" alt="Partager" />
                         </Button>
                         {(doc.owner_id === userId || userRole === 'admin') && (
-                        <Button
-                          variant="dark"
-                          size="sm"
-                          className="ms-2"
-                          onClick={() => handleOpenConfirm(doc)}
-                        >
-                          <i className="bi bi-play-fill me-1"></i>
-                        </Button>
-                      )}
+                          <Button
+                            variant="dark"
+                            size="sm"
+                            className="ms-2"
+                            onClick={() => handleOpenConfirm(doc)}
+                          >
+                            <i className="bi bi-play-fill me-1"></i>
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   )) : (

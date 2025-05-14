@@ -28,35 +28,62 @@ function verifyToken(req, res, next) {
 
 // ➕ Ajouter une nouvelle notification
 router.post('/', async (req, res) => {
-  const { user_id, sender_id, message, type, related_task_id, document_id } = req.body;
+  const {
+    user_id,
+    sender_id,
+    message,
+    type,
+    related_task_id,
+    document_id,
+    decision,
+    is_read
+  } = req.body;
 
+  // Validation de base
   if (!user_id || !sender_id || !message) {
-    return res.status(400).json({ message: 'user_id, sender_id et message sont obligatoires' });
+    return res.status(400).json({
+      message: 'user_id, sender_id et message sont obligatoires'
+    });
   }
 
   const parsedUserId = parseInt(user_id, 10);
   const parsedSenderId = parseInt(sender_id, 10);
   const parsedRelatedTaskId = related_task_id ? parseInt(related_task_id, 10) : null;
   const parsedDocumentId = document_id ? parseInt(document_id, 10) : null;
+  const parsedDecision = typeof decision === 'boolean' ? decision : null;
+  const parsedIsRead = typeof is_read === 'boolean' ? is_read : false;
 
   if (isNaN(parsedUserId) || isNaN(parsedSenderId)) {
-    return res.status(400).json({ message: 'user_id et sender_id doivent être des entiers valides' });
+    return res.status(400).json({
+      message: 'user_id et sender_id doivent être des entiers valides'
+    });
   }
 
   try {
     const result = await pool.query(
-      `INSERT INTO notifications (user_id, sender_id, message, type, related_task_id, document_id)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO notifications 
+        (user_id, sender_id, message, type, related_task_id, document_id, is_read, decision)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
-      [parsedUserId, parsedSenderId, message, type || 'info', parsedRelatedTaskId, parsedDocumentId]
+      [
+        parsedUserId,
+        parsedSenderId,
+        message,
+        type || 'info',
+        parsedRelatedTaskId,
+        parsedDocumentId,
+        parsedIsRead,
+        parsedDecision
+      ]
     );
 
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error('Erreur lors de l\'ajout de la notification', err);
+    console.error("Erreur lors de l'ajout de la notification :", err);
     res.status(500).json({ message: 'Erreur serveur' });
   }
 });
+
 
 // 📬 Récupérer les notifications simples d’un utilisateur
 router.get('/:user_id', async (req, res) => {

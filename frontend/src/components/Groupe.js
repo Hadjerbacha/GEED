@@ -65,19 +65,27 @@ const Groupe = () => {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      if (editId) {
-        await axiosAuth.put(`${API}/${editId}`, form);
-      } else {
-        await axiosAuth.post(API, form);
-      }
-      resetForm();
-      fetchGroups();
-    } catch (err) {
-      console.error('Erreur enregistrement groupe :', err);
-    }
+  e.preventDefault();
+
+  // Forcer user_ids à être un tableau d'entiers
+  const formattedForm = {
+    ...form,
+    user_ids: form.user_ids.map(id => parseInt(id, 10))
   };
+
+  try {
+    if (editId) {
+      await axiosAuth.put(`${API}/${editId}`, formattedForm);
+    } else {
+      await axiosAuth.post(API, formattedForm);
+    }
+    resetForm();
+    fetchGroups();
+  } catch (err) {
+    console.error('Erreur enregistrement groupe :', err);
+  }
+};
+
 
   const resetForm = () => {
     setForm({ nom: '', description: '', user_ids: [] });
