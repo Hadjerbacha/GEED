@@ -198,9 +198,10 @@ const Doc = () => {
     formData.append('visibility', accessType);
     formData.append('access', accessType);
     formData.append('collectionName', collectionName);
-    formData.append('summary', summary);         // si tu as un état React summary
-    formData.append('priority', priority);       // idem
-    formData.append('tags', JSON.stringify(tags)); // pour les tableaux
+    formData.append('tags', tags); 
+    formData.append('summary', description);
+    formData.append('access', accessType);
+    formData.append('prio', priority);
 
     if (forceUpload) formData.append('isNewVersion', 'true');
 

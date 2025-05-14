@@ -121,24 +121,24 @@ router.get('/:id/permissions', auth, async (req, res) => {
 async function initializeDatabase() {
   try {
     // Table pour les documents
-    await pool.query(`
-  CREATE TABLE IF NOT EXISTS documents (
+  await pool.query(`
+  CREATE TABLE IF NOT EXISTS document_versions (
     id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    file_path TEXT NOT NULL,
+    document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+    version INTEGER NOT NULL,
+    name TEXT,
+    file_path TEXT,
     category TEXT,
     text_content TEXT,
-    summary TEXT,               -- 🆕 Description
-    tags TEXT[],                -- 🆕 Tableau de mots-clés
-    owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    visibility VARCHAR(20) DEFAULT 'private',
-    version INTEGER DEFAULT 1,
-    original_id INTEGER,
+    summary TEXT,
+    tags TEXT[],
+    owner_id INTEGER,
+    visibility VARCHAR(20),
     ocr_text TEXT,
-    date TIMESTAMP DEFAULT NOW(),
-    is_archived BOOLEAN DEFAULT FALSE
+    date TIMESTAMP DEFAULT NOW()
   );
 `);
+
 
 
 
@@ -261,6 +261,9 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     let result;
     let insertQuery;
     let insertValues;
+    tags = typeof tags === 'string' ? tags.split(',') : [];
+
+
 
     if (existing.rowCount > 0) {
       const latestDoc = existing.rows[0];
@@ -292,26 +295,29 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
     // ✅ Requête d'insertion du document (dans tous les cas)
     insertQuery = `
-      INSERT INTO documents
-        (name, file_path, category, text_content, summary, tags, owner_id,
-         visibility, version, original_id, ocr_text)
-      VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10, $11)
-      RETURNING *;
-    `;
+  INSERT INTO documents
+    (name, file_path, category, text_content, summary, tags, owner_id,
+     visibility, version, original_id, ocr_text, priority, access)
+  VALUES ($1, $2, $3, $4, $5, $6::text[], $7, $8, $9, $10, $11, $12, $13)
+  RETURNING *;
+`;
 
-    insertValues = [
-      name,
-      file_path,
-      finalCategory,
-      extractedText,
-      summary,
-      tags ? tags.split(',').map(tag => tag.trim()) : [],
-      req.user.id,
-      access,
-      version,
-      original_id,
-      extractedText
-    ];
+   insertValues = [
+  name,
+  file_path,
+  finalCategory,
+  extractedText,
+  summary,
+  tags,
+  req.user.id,
+  access,            // pour visibility
+  version,
+  original_id,
+  extractedText,
+  prio,              // $12 = priority
+  access             // $13 = access (boolean ou text)
+];
+
 
     result = await pool.query(insertQuery, insertValues);
     const documentId = result.rows[0].id;
