@@ -21,6 +21,9 @@ const DocumentDetails = () => {
   const [showVersions, setShowVersions] = useState(false);
   const [oldVersions, setOldVersions] = useState([]);
   const [requestSent, setRequestSent] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+    
 
   useEffect(() => {
     const fetchDocument = async () => {
@@ -239,6 +242,29 @@ const DocumentDetails = () => {
   console.log("currentUser:", currentUser);
   console.log("Versions:", versions.length);
 
+   const fetchNotifications = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`http://localhost:5000/api/notifications/${userId}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setNotifications(res.data);
+      } catch (error) {
+        console.error('Erreur lors de la récupération des notifications:', error);
+      }
+    };
+
+     useEffect(() => {
+        if (currentUser) {
+          axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`)
+            .then(res => {
+              const unreadCount = res.data.filter(notification => !notification.is_read).length;
+              setUnreadNotificationsCount(unreadCount);
+            })
+            .catch(err => console.error("Erreur notifications :", err));
+        }
+      }, [currentUser]);
+
   return (
     <>
       <Navbar />
@@ -286,7 +312,7 @@ const DocumentDetails = () => {
                         </Button>
                       )}
                       {document.version > 1 && (
-                        (currentUser?.role === 'admin' || document.access === true)
+                        (currentUser?.role === 'admin' || document.access === true )
                         && <Button
                           variant="outline-secondary"
                           className="mt-2 rounded-pill fw-semibold px-4 py-2"

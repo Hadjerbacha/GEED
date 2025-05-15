@@ -402,26 +402,6 @@ router.post('/:id/share', auth, async (req, res) => {
   }
 });
 
-router.get('/stats', async (req, res) => {
-  try {
-    const usersResult = await pool.query('SELECT COUNT(*) FROM users');
-    const documentsResult = await pool.query('SELECT COUNT(*) FROM documents');
-    const tasksResult = await pool.query('SELECT COUNT(*) FROM tasks');
-    const workflowsResult = await pool.query('SELECT COUNT(*) FROM workflow');
-    const notificationsResult = await pool.query('SELECT COUNT(*) FROM notifications');
-
-    res.json({
-      totalUsers: parseInt(usersResult.rows[0].count, 10),
-      totalDocuments: parseInt(documentsResult.rows[0].count, 10),
-      totalTasks: parseInt(tasksResult.rows[0].count, 10),
-      totalWorkflows: parseInt(workflowsResult.rows[0].count, 10),
-      totalNotifications: parseInt(notificationsResult.rows[0].count, 10),
-    });
-  } catch (error) {
-    console.error('Erreur lors de la récupération des statistiques :', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
 
 // GET : récupérer un document spécifique par ID
 router.get('/:id', auth, async (req, res) => {
@@ -502,6 +482,75 @@ router.patch('/:id/visibility', auth, async (req, res) => {
   }
 });
 
+
+// 📈 Ajout des statistiques dans le backend
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const [
+      userCountResult,
+      documentCountResult,
+      collectionCountResult,
+      taskCountResult,
+      workflowCountResult,
+      documentPerUserResult,
+      taskStatusResult
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM users'),
+      pool.query('SELECT COUNT(*) FROM documents'),
+      pool.query('SELECT COUNT(*) FROM collections'),
+      pool.query('SELECT COUNT(*) FROM tasks'),
+      pool.query('SELECT COUNT(*) FROM workflow'),
+      pool.query(`
+        SELECT u.id, u.name, u.prenom, COUNT(d.id) AS document_count
+        FROM users u
+        LEFT JOIN documents d ON u.id = d.owner_id
+        GROUP BY u.id
+        ORDER BY document_count DESC
+        LIMIT 5
+      `),
+      pool.query(`
+        SELECT status, COUNT(*) AS count
+        FROM tasks
+        GROUP BY status
+      `)
+    ]);
+
+    res.status(200).json({
+      totalUsers: parseInt(userCountResult.rows[0].count, 10),
+      totalDocuments: parseInt(documentCountResult.rows[0].count, 10),
+      totalCollections: parseInt(collectionCountResult.rows[0].count, 10),
+      totalTasks: parseInt(taskCountResult.rows[0].count, 10),
+      totalWorkflows: parseInt(workflowCountResult.rows[0].count, 10),
+      topDocumentOwners: documentPerUserResult.rows,
+      taskStatusDistribution: taskStatusResult.rows
+    });
+  } catch (error) {
+    console.error('Erreur récupération statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques' });
+  }
+});
+
+
+router.get('/stats', async (req, res) => {
+  try {
+    const usersResult = await pool.query('SELECT COUNT(*) FROM users');
+    const documentsResult = await pool.query('SELECT COUNT(*) FROM documents');
+    const tasksResult = await pool.query('SELECT COUNT(*) FROM tasks');
+    const workflowsResult = await pool.query('SELECT COUNT(*) FROM workflow');
+    const notificationsResult = await pool.query('SELECT COUNT(*) FROM notifications');
+
+    res.json({
+      totalUsers: parseInt(usersResult.rows[0].count, 10),
+      totalDocuments: parseInt(documentsResult.rows[0].count, 10),
+      totalTasks: parseInt(tasksResult.rows[0].count, 10),
+      totalWorkflows: parseInt(workflowsResult.rows[0].count, 10),
+      totalNotifications: parseInt(notificationsResult.rows[0].count, 10),
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 router.post('/', async (req, res) => {
   const { text } = req.body;
