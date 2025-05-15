@@ -5,7 +5,9 @@ const {
     login,
     register,
     updateUserController,
-    deleteUserController
+    deleteUserController,
+    logout,
+    getUserSessionsController
   } = require("../controllers/authController");
 
 // Route pour récupérer tous les utilisateurs
@@ -16,6 +18,8 @@ router.post("/register", register);
 // ✅ Nouvelles routes :
 router.put("/users/:id", updateUserController);
 router.delete("/users/:id", deleteUserController);
+router.post("/logout", logout);
+router.get("/sessions", getUserSessionsController);
 
 module.exports = router;
 

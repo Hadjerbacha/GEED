@@ -6,6 +6,9 @@ const { logWorkflowAction } = require('../utils/log');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { analyzeWorkflowWithGemini } = require('./gimini');
 const { getWorkflowFromDB } = require('./service');
+const { assignTasksAutomatically} = require('../controllers/authController');
+
+
 // ➕ Ajouter un workflow
 router.post('/', async (req, res) => {
   const { name, description, echeance, status, priorite, created_by, documentId } = req.body;
@@ -675,5 +678,136 @@ router.post('/:id/archive', authMiddleware, async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de l\'archivage' });
   }
 });
+
+
+router.post("/:id/assign-tasks", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params; // ID du workflow
+    const userId = req.user.id; // ID de l'utilisateur authentifié
+
+    // 1. Vérifier que l'utilisateur a le droit d'assigner des tâches
+    const userCheck = await pool.query(
+      'SELECT role FROM users WHERE id = $1',
+      [userId]
+    );
+    
+    if (userCheck.rows.length === 0 || !['admin', 'manager'].includes(userCheck.rows[0].role)) {
+      return res.status(403).json({ 
+        success: false,
+        message: "Permission refusée" 
+      });
+    }
+
+    // 2. Récupérer les tâches non assignées de ce workflow
+   const tasksResult = await pool.query(
+  `SELECT * FROM tasks 
+   WHERE workflow_id = $1 
+   AND (assigned_to IS NULL OR cardinality(assigned_to) = 0)`,
+  [id]
+);
+
+    
+    const tasks = tasksResult.rows;
+    
+    if (!tasks || tasks.length === 0) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Aucune tâche à assigner" 
+      });
+    }
+
+    // 3. Récupérer les stats des utilisateurs
+    const usersStats = await pool.query(`
+      SELECT 
+        u.id,
+        u.name,
+        u.prenom,
+        u.role,
+        COALESCE(SUM(s.duration), 0) as total_duration
+      FROM users u
+      LEFT JOIN sessions s ON u.id = s.user_id
+      GROUP BY u.id
+      ORDER BY total_duration ASC
+    `);
+
+    // 4. Préparer les utilisateurs disponibles par rôle
+    const availableUsers = {
+      employe: usersStats.rows.filter(u => u.role === 'employe'),
+      directeur: usersStats.rows.find(u => u.role === 'directeur'),
+      manager: usersStats.rows.filter(u => u.role === 'manager')
+    };
+
+    // 5. Assigner les tâches
+    const assignments = [];
+    
+    for (const task of tasks) {
+      try {
+        let assignedUser = null;
+        
+        // Tâches de validation -> Directeur
+        if (task.title.toLowerCase().includes('validation') || task.type === 'validation') {
+          assignedUser = availableUsers.directeur;
+        } 
+        // Tâches de gestion -> Manager
+        else if (task.title.toLowerCase().includes('gestion') || task.type === 'management') {
+          assignedUser = availableUsers.manager.length > 0 
+            ? availableUsers.manager[0] 
+            : null;
+        }
+        // Tâches normales -> Employé le moins occupé
+        else {
+          assignedUser = availableUsers.employe.length > 0 
+            ? availableUsers.employe[0] 
+            : null;
+        }
+
+        if (assignedUser) {
+          await pool.query(
+  `UPDATE tasks SET assigned_to = $1 WHERE id = $2`,
+  [[assignedUser.id], task.id]
+);
+
+          
+          assignments.push({
+            taskId: task.id,
+            taskTitle: task.title,
+            assignedTo: assignedUser.id,
+            assignedName: `${assignedUser.prenom} ${assignedUser.name}`
+          });
+
+          // Mettre à jour la liste des disponibles (rotation)
+          if (!['directeur', 'manager'].includes(assignedUser.role)) {
+            availableUsers.employe.push(availableUsers.employe.shift());
+          }
+        }
+      } catch (taskErr) {
+        console.error(`Erreur sur la tâche ${task.id}:`, taskErr);
+      }
+    }
+
+    // 6. Retourner le résultat
+    if (assignments.length > 0) {
+      return res.json({
+        success: true,
+        message: `${assignments.length}/${tasks.length} tâches assignées`,
+        assignments
+      });
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "Aucune tâche n'a pu être assignée"
+      });
+    }
+
+  } catch (err) {
+    console.error("Erreur dans l'assignation automatique:", err);
+    return res.status(500).json({ 
+      success: false,
+      message: "Erreur serveur lors de l'assignation",
+      error: err.message
+    });
+  }
+});
+
 
 module.exports = router;

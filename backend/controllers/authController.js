@@ -1,6 +1,6 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { getUsers, findUserByEmail, createUser, updateUser, deleteUser } = require("../models/userModel");
+const { getUsers, findUserByEmail, createUser, updateUser, deleteUser, createSession, getUserSessions, getActiveSession, updateLogoutTime, getUserWorkStats} = require("../models/userModel");
 require("dotenv").config();
 
 
@@ -31,6 +31,9 @@ const login = async (req, res) => {
     const token = jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, {
       expiresIn: "300d",
     });
+     // Enregistrer la session
+    const loginTime = new Date();
+    await createSession(user.id, loginTime, null, null);
 
     const { password: _, ...userData } = user;
     res.status(200).json({ token, user: userData });
@@ -96,10 +99,104 @@ const deleteUserController = async (req, res) => {
   }
 };
 
+// Dans authController.js
+const logout = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: "Non autorisé" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const logoutTime = new Date();
+
+    // Mettre à jour la session existante
+    const session = await getActiveSession(decoded.id);
+    if (session) {
+      await updateLogoutTime(decoded.id, logoutTime);
+    }
+
+    res.status(200).json({ message: "Déconnexion réussie" });
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+const getUserSessionsController = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+    if (!token) return res.status(401).json({ message: "Non autorisé" });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const sessions = await getUserSessions(decoded.id);
+    
+    res.json(sessions);
+  } catch (err) {
+    console.error(err.message);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+const assignTasksAutomatically = async (workflowId, tasks) => {
+  try {
+    // 1. Récupérer les stats des utilisateurs
+    const usersStats = await getUserWorkStats();
+    
+    // 2. Filtrer par rôle et trier par durée de travail
+    const availableUsers = usersStats
+      .filter(user => user.role === 'employe') // Seulement les employés pour les tâches normales
+      .sort((a, b) => a.total_duration - b.total_duration); // Moins chargés en premier
+
+    if (availableUsers.length === 0) {
+      throw new Error("Aucun utilisateur disponible pour l'assignation");
+    }
+
+    // 3. Assigner les tâches
+    const assignments = [];
+    let userIndex = 0;
+
+    for (const task of tasks) {
+      // Pour les tâches de validation, trouver un directeur
+      if (task.title.toLowerCase().includes('validation')) {
+        const director = usersStats.find(u => u.role === 'directeur');
+        if (director) {
+          assignments.push({
+            taskId: task.id,
+            assignedTo: director.id
+          });
+        }
+      } else {
+        // Assignation round-robin aux employés
+        const user = availableUsers[userIndex % availableUsers.length];
+        assignments.push({
+          taskId: task.id,
+          assignedTo: user.id
+        });
+        userIndex++;
+      }
+    }
+
+    // 4. Sauvegarder les assignations
+    for (const assignment of assignments) {
+      await pool.query(
+        `UPDATE tasks SET assigned_to = $1 WHERE id = $2`,
+        [JSON.stringify([assignment.assignedTo]), assignment.taskId]
+      );
+    }
+
+    return assignments;
+  } catch (err) {
+    console.error("Erreur dans l'assignation automatique:", err);
+    throw err;
+  }
+};
+
 module.exports = {
   getUsersController,
   login,
   register,
   updateUserController,
-  deleteUserController
+  deleteUserController,
+  logout,
+  getUserSessionsController,
+  assignTasksAutomatically
 };

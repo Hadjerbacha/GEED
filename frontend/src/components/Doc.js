@@ -12,6 +12,7 @@ import { toast } from 'react-toastify';
 import { FaCloudUploadAlt } from 'react-icons/fa';
 import Tesseract from 'tesseract.js';
 import { getDocument } from 'pdfjs-dist/webpack'; // Importer getDocument depuis pdfjs-dist
+import { pdfjs } from 'pdfjs-dist/webpack';
 
 
 
@@ -515,13 +516,8 @@ useEffect(() => {
             {useAdvancedFilter ? 'Désactiver Avancé' : 'Recherche Avancée'}
           </Button></Col>
         </Row>
-
-        <Container className="mt-5 d-flex justify-content-center">
-          <Card className="w-100 shadow-sm" style={{ maxWidth: "1000px" }}>
-            <Card.Body>
-              <h3 className="text-center mb-4">📂 Liste des documents</h3>
-
-              <Button
+        <br/>
+        <Button
                 variant={showUploadForm ? "danger" : "primary"}
                 onClick={() => setShowUploadForm(!showUploadForm)}
                 className="mb-4"
@@ -529,11 +525,16 @@ useEffect(() => {
               >
                 {showUploadForm ? 'Annuler' : 'Télécharger un document'}
               </Button>
+        <Container fluid className="d-flex justify-content-center">
+        <Card className="w-100 border border-transparent">
+            <Card.Body>
+
+              
               {errorMessage && <Alert variant="danger">{errorMessage}</Alert>}
 
               <Card.Body>
                 {showUploadForm && (
-                  <Card className="mb-4 p-4">
+                  <Card className="mb-4 p-4 border-transparent">
                     <Row className="mb-3">
                       <Col md={3} className="mb-3">
                         <Form.Control
@@ -679,7 +680,7 @@ useEffect(() => {
                 )}
               </Card.Body>
 
-              <div className="d-flex gap-2 mt-3">
+              <div className="container-fluid d-flex gap-2 justify-content-center mb-4">
                 <Button
                   key="all"
                   variant={selectedCategory === '' ? 'secondary' : 'outline-secondary'}

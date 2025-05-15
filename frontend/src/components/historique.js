@@ -17,8 +17,8 @@ import Navbar from './Navbar';
 import { format } from 'date-fns';
 import fr from 'date-fns/locale/fr';
 import { jwtDecode } from 'jwt-decode';
-import { FiLogIn, FiLogOut, FiUpload, FiTrash2, FiEdit, FiPlus, FiDownload } from 'react-icons/fi';
-import '../style/activity.css'; // Assurez-vous d'importer le fichier CSS pour le style
+import { FiLogIn, FiLogOut } from 'react-icons/fi';
+import '../style/activity.css';
 
 const ActivityLog = () => {
   const [activities, setActivities] = useState([]);
@@ -26,14 +26,11 @@ const ActivityLog = () => {
   const [error, setError] = useState(null);
   const [userId, setUserId] = useState(null);
   const [filters, setFilters] = useState({
-    actionType: '',
-    entityType: '',
     dateFrom: '',
     dateTo: ''
   });
   const [expandedRows, setExpandedRows] = useState([]);
 
-  // Get user ID from token
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
@@ -45,16 +42,24 @@ const ActivityLog = () => {
   const fetchActivities = async () => {
     try {
       setLoading(true);
-      const params = new URLSearchParams();
-      if (filters.actionType) params.append('actionType', filters.actionType);
-      if (filters.entityType) params.append('entityType', filters.entityType);
-      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
-      if (filters.dateTo) params.append('dateTo', filters.dateTo);
-
-      const { data } = await axios.get(`/api/activities/me?${params.toString()}`, {
+      const { data } = await axios.get(`http://localhost:5000/api/auth/sessions`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      setActivities(data);
+      
+      // Transformer les données de session en activités
+      const transformedActivities = data.map(session => ({
+        id: session.id,
+        action_type: session.logout_time ? 'logout' : 'login',
+        type: 'Session utilisateur',
+        login_time: session.login_time,
+        logout_time: session.logout_time,
+        duration: session.duration ? `${Math.round(session.duration/60)} minutes` : 'En cours',
+        details: session.logout_time 
+          ? `Session terminée (${Math.round(session.duration/60)} minutes)` 
+          : 'Session active'
+      }));
+
+      setActivities(transformedActivities);
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Erreur lors du chargement des activités');
@@ -70,8 +75,6 @@ const ActivityLog = () => {
 
   const handleResetFilters = () => {
     setFilters({
-      actionType: '',
-      entityType: '',
       dateFrom: '',
       dateTo: ''
     });
@@ -86,83 +89,24 @@ const ActivityLog = () => {
   };
 
   const renderActionIcon = (actionType) => {
-    const iconSize = 18;
-    const icons = {
-      login: <FiLogIn size={iconSize} className="text-primary" />,
-      logout: <FiLogOut size={iconSize} className="text-secondary" />,
-      upload: <FiUpload size={iconSize} className="text-success" />,
-      delete: <FiTrash2 size={iconSize} className="text-danger" />,
-      update: <FiEdit size={iconSize} className="text-warning" />,
-      create: <FiPlus size={iconSize} className="text-info" />,
-      download: <FiDownload size={iconSize} className="text-primary" />
-    };
-    return icons[actionType] || <FiEdit size={iconSize} />;
+    return actionType === 'login' 
+      ? <FiLogIn size={18} className="text-primary" /> 
+      : <FiLogOut size={18} className="text-secondary" />;
   };
 
   const renderActionBadge = (actionType) => {
-    const actionLabels = {
-      login: 'Connexion',
-      logout: 'Déconnexion',
-      upload: 'Upload',
-      delete: 'Suppression',
-      update: 'Modification',
-      create: 'Création',
-      download: 'Téléchargement'
-    };
-
-    const badgeVariants = {
-      login: 'primary',
-      logout: 'secondary',
-      upload: 'success',
-      delete: 'danger',
-      update: 'warning',
-      create: 'info',
-      download: 'primary'
-    };
-
     return (
-      <Badge bg={badgeVariants[actionType] || 'dark'} className="text-capitalize">
-        {actionLabels[actionType] || actionType}
+      <Badge bg={actionType === 'login' ? 'primary' : 'secondary'} className="text-capitalize">
+        {actionType === 'login' ? 'Connexion' : 'Déconnexion'}
       </Badge>
     );
   };
 
-  const renderEntityLink = (activity) => {
-    if (!activity.entity_id) return null;
-    
-    const links = {
-      document: `/documents/${activity.entity_id}`,
-      user: `/users/${activity.entity_id}`,
-      task: `/tasks/${activity.entity_id}`
-    };
-    
-    if (links[activity.entity_type]) {
-      return (
-        <Button 
-          variant="link" 
-          size="sm" 
-          href={links[activity.entity_type]}
-          className="px-0"
-        >
-          Voir {activity.entity_type}
-        </Button>
-      );
-    }
-    return null;
-  };
-
-  const formatDetails = (details) => {
-    if (!details) return null;
-    
+  const formatDateSafe = (dateString) => {
     try {
-      const parsedDetails = typeof details === 'string' ? JSON.parse(details) : details;
-      return Object.entries(parsedDetails).map(([key, value]) => (
-        <div key={key} className="detail-item">
-          <strong>{key}:</strong> {String(value)}
-        </div>
-      ));
+      return dateString ? format(new Date(dateString), 'PPpp', { locale: fr }) : 'N/A';
     } catch {
-      return <div className="text-muted">{String(details)}</div>;
+      return 'Date invalide';
     }
   };
 
@@ -176,7 +120,7 @@ const ActivityLog = () => {
               <Col md={6}>
                 <h4 className="mb-0">
                   <i className="bi bi-clock-history me-2"></i>
-                  Journal d'Activité
+                  Journal des Connexions
                 </h4>
               </Col>
               <Col md={6} className="text-md-end">
@@ -195,7 +139,7 @@ const ActivityLog = () => {
           <Card.Body className="p-0">
             <div className="filter-section p-3 border-bottom">
               <Row>
-                <Col md={3}>
+                <Col md={4}>
                   <Form.Group controlId="dateFrom">
                     <Form.Label>Du</Form.Label>
                     <Form.Control
@@ -205,7 +149,7 @@ const ActivityLog = () => {
                     />
                   </Form.Group>
                 </Col>
-                <Col md={3}>
+                <Col md={4}>
                   <Form.Group controlId="dateTo">
                     <Form.Label>Au</Form.Label>
                     <Form.Control
@@ -213,38 +157,6 @@ const ActivityLog = () => {
                       value={filters.dateTo}
                       onChange={(e) => setFilters({...filters, dateTo: e.target.value})}
                     />
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group controlId="actionType">
-                    <Form.Label>Type d'action</Form.Label>
-                    <Form.Select
-                      value={filters.actionType}
-                      onChange={(e) => setFilters({...filters, actionType: e.target.value})}
-                    >
-                      <option value="">Toutes les actions</option>
-                      <option value="login">Connexions</option>
-                      <option value="logout">Déconnexions</option>
-                      <option value="upload">Uploads</option>
-                      <option value="delete">Suppressions</option>
-                      <option value="update">Modifications</option>
-                      <option value="create">Créations</option>
-                      <option value="download">Téléchargements</option>
-                    </Form.Select>
-                  </Form.Group>
-                </Col>
-                <Col md={3}>
-                  <Form.Group controlId="entityType">
-                    <Form.Label>Type d'entité</Form.Label>
-                    <Form.Select
-                      value={filters.entityType}
-                      onChange={(e) => setFilters({...filters, entityType: e.target.value})}
-                    >
-                      <option value="">Tous les types</option>
-                      <option value="document">Documents</option>
-                      <option value="user">Utilisateurs</option>
-                      <option value="task">Tâches</option>
-                    </Form.Select>
                   </Form.Group>
                 </Col>
               </Row>
@@ -272,11 +184,12 @@ const ActivityLog = () => {
                 <Table hover className="mb-0">
                   <thead className="table-light">
                     <tr>
-                      <th style={{ width: '15%' }}>Action</th>
-                      <th style={{ width: '15%' }}>Type</th>
-                      <th style={{ width: '40%' }}>Détails</th>
-                      <th style={{ width: '20%' }}>Date</th>
-                      <th style={{ width: '10%' }}></th>
+                      <th>Action</th>
+                      <th>Type</th>
+                      <th>Connexion</th>
+                      <th>Déconnexion</th>
+                      <th>Durée</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -295,28 +208,10 @@ const ActivityLog = () => {
                               {renderActionBadge(activity.action_type)}
                             </div>
                           </td>
-                          <td>
-                            {activity.entity_type ? (
-                              <Badge bg="light" text="dark" className="text-capitalize">
-                                {activity.entity_type}
-                              </Badge>
-                            ) : '-'}
-                          </td>
-                          <td>
-                            <div className="text-truncate" style={{ maxWidth: '300px' }}>
-                              {activity.details && (
-                                <small className="text-muted">
-                                  {typeof activity.details === 'string' 
-                                    ? activity.details 
-                                    : JSON.stringify(activity.details)}
-                                </small>
-                              )}
-                            </div>
-                            {renderEntityLink(activity)}
-                          </td>
-                          <td>
-                            {format(new Date(activity.created_at), 'PPpp', { locale: fr })}
-                          </td>
+                          <td>{activity.type}</td>
+                          <td>{formatDateSafe(activity.login_time)}</td>
+                          <td>{activity.logout_time ? formatDateSafe(activity.logout_time) : 'En cours'}</td>
+                          <td>{activity.duration}</td>
                           <td className="text-end">
                             <Button 
                               variant="link" 
@@ -332,17 +227,13 @@ const ActivityLog = () => {
                         </tr>
                         {expandedRows.includes(activity.id) && (
                           <tr>
-                            <td colSpan="5" className="bg-light">
+                            <td colSpan="6" className="bg-light">
                               <div className="p-3">
                                 <h6>Détails complets :</h6>
                                 <div className="details-container">
-                                  {formatDetails(activity.details)}
-                                </div>
-                                <div className="mt-2">
-                                  <small className="text-muted">
-                                    ID: {activity.id} | IP: {activity.ip_address || 'N/A'} | 
-                                    Agent: {activity.user_agent || 'N/A'}
-                                  </small>
+                                  <div className="detail-item">
+                                    <strong>Statut:</strong> {activity.details}
+                                  </div>
                                 </div>
                               </div>
                             </td>
@@ -359,7 +250,7 @@ const ActivityLog = () => {
           {activities.length > 0 && !loading && (
             <Card.Footer className="py-2 text-muted">
               <small>
-                Affichage de {activities.length} activité{activities.length > 1 ? 's' : ''}
+                Affichage de {activities.length} session{activities.length > 1 ? 's' : ''}
               </small>
             </Card.Footer>
           )}

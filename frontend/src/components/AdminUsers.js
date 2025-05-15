@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { Modal, Button, Form, Table } from "react-bootstrap";
+import { Modal, Button, Form, Table, Badge, Container } from "react-bootstrap";
 import Navbar from './Navbar';
 import Groupe from './Groupe';
 import Tabs from 'react-bootstrap/Tabs';
 import Tab from 'react-bootstrap/Tab';
+import { FiPlus, FiEdit2, FiTrash2 } from 'react-icons/fi';
 const AdminUsers = () => {
 	const [users, setUsers] = useState([]);
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -113,77 +114,117 @@ const AdminUsers = () => {
       };
       
 	
+	  const getRoleBadge = (role) => {
+        const variants = {
+            admin: "danger",
+            directeur: "primary",
+            chef: "warning",
+            employe: "success"
+        };
+        return <Badge bg={variants[role]} className="text-capitalize">{role}</Badge>;
+    };
 
-	return (
-		<div>
-			<Navbar />
-
+    return (
+        <div className="admin-users-page">
+            <Navbar />
+            
             <style>
-{`
-  .custom-tabs .nav-link {
-    color:rgb(0, 0, 0);
-    background-color: transparent;
-    border-radius: 10px;
-  }
+                {`
+                .admin-users-page {
+                    background-color: #f8f9fa;
+                    min-height: 100vh;
+                }
+                .custom-tabs .nav-link {
+                    color: #495057;
+                    font-weight: 500;
+                    border: none;
+                    padding: 0.75rem 1.5rem;
+                    margin-right: 0.5rem;
+                }
+                .custom-tabs .nav-link.active {
+                    color: #fff !important;
+                    background-color: #0d6efd;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+                }
+                .users-table {
+                    background-color: white;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+                }
+                .table-header {
+                    background-color: #f8f9fa;
+                }
+                .action-btn {
+                    padding: 0.25rem 0.5rem;
+                    font-size: 0.875rem;
+                }
+                `}
+            </style>
 
-  .custom-tabs .nav-link.active {
-    color: white !important;
-    background-color: #0d6efd;
-    border-radius: 10px;
-  }
-`}
-</style>
-<div className="m-4">
+            <Container fluid className="py-4">
+                <Tabs defaultActiveKey="users" id="admin-tabs" className="custom-tabs mb-4">
+                    <Tab eventKey="users" title="Gestion des Utilisateurs">
+                        <div className="d-flex justify-content-between align-items-center mb-4">
+                            <h2 className="mb-0">Utilisateurs</h2>
+                            <Button 
+                                variant="success" 
+                                onClick={() => setShowAddModal(true)}
+                                className="d-flex align-items-center"
+                            >
+                                <FiPlus className="me-2" /> Ajouter un utilisateur
+                            </Button>
+                        </div>
+                        
+                        <div className="users-table p-3">
+                            <Table hover responsive>
+                                <thead className="table-header">
+                                    <tr>
+                                        <th>Nom</th>
+                                        <th>Prénom</th>
+                                        <th>Email</th>
+                                        <th>Rôle</th>
+                                        <th className="text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {users.map((user) => (
+                                        <tr key={user.id}>
+                                            <td className="fw-semibold">{user.name}</td>
+                                            <td>{user.prenom}</td>
+                                            <td>{user.email}</td>
+                                            <td>{getRoleBadge(user.role)}</td>
+                                            <td className="text-end">
+                                                <Button
+                                                    variant="outline-warning"
+                                                    size="sm"
+                                                    className="action-btn me-2"
+                                                    onClick={() => handleEditUser(user)}
+                                                >
+                                                    <FiEdit2 />
+                                                </Button>
+                                                <Button 
+                                                    variant="outline-danger" 
+                                                    size="sm" 
+                                                    className="action-btn"
+                                                    onClick={() => handleDeleteClick(user)}
+                                                >
+                                                    <FiTrash2 />
+                                                </Button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </Table>
+                        </div>
+                    </Tab>
+                    <Tab eventKey="groups" title="Gestion des Groupes">
+                        <Groupe />
+                    </Tab>
+                </Tabs>
 
-                <Tabs defaultActiveKey="users" id="admin-tabs" className="custom-tabs">
-                <Tab eventKey="users" title="Utilisateurs">
-                {/* Section des utilisateurs ici (déjà existante) */}
-                <br/>
-                <Button variant="success" onClick={() => setShowAddModal(true)}>
-				Ajouter un utilisateur
-			    </Button>
-                <br/><br/>
-                <Table striped bordered hover responsive>
-				<thead>
-					<tr>
-						<th>Nom</th>
-						<th>Prénom</th>
-						<th>Email</th>
-						<th>Rôle</th>
-						<th>Actions</th>
-					</tr>
-				</thead>
-				<tbody>
-					{users.map((user) => (
-						<tr key={user.id}>
-							<td>{user.name}</td>
-							<td>{user.prenom}</td>
-							<td>{user.email}</td>
-							<td>{user.role}</td>
-							<td>
-								<Button
-									variant="warning"
-									size="sm"
-									className="me-2"
-									onClick={() => handleEditUser(user)}
-								>
-									Modifier
-								</Button>
-                                <Button variant="danger" size="sm" className="me-2" onClick={() => handleDeleteClick(user)}>Supprimer</Button>
-
-							</td>
-						</tr>
-					))}
-				</tbody>
-			    </Table>
-                </Tab>
-                <Tab eventKey="groups" title="Groupes">
-                {/* Nouvelle section pour les groupes */}
-                <Groupe />
-                </Tab>
-            </Tabs>
-            </div>
-            {/* Modal d'ajout */}
+                {/* [Les modals existants restent inchangés...] */}
+                {/* Modal d'ajout */}
             <Modal
   show={showAddModal}
   onHide={() => setShowAddModal(false)}
@@ -332,8 +373,9 @@ const AdminUsers = () => {
                     </Button>
                 </Modal.Footer>
                 </Modal>
-		</div>
-	);
+            </Container>
+        </div>
+    );
 };
 
 export default AdminUsers;

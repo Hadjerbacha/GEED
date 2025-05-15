@@ -221,12 +221,17 @@ const TasksPanel = ({ tasks, onEdit, onDelete }) => {
                               </a>
                             </span>
                           )}
-                          {task.assigned_to?.length > 0 && (
-                            <span className="d-flex align-items-center me-3">
-                              <FiUsers className="me-1" />
-                              Assigné à: {task.assigned_usernames || task.assigned_to.join(', ')}
-                            </span>
-                          )}
+{task.assigned_to?.length > 0 && (
+  <span className="d-flex align-items-center me-3">
+    <FiUsers className="me-1" />
+    Assigné à: {task.assigned_usernames || task.assigned_to.join(', ')}
+    {task.type === 'validation' && (
+      <Badge bg="warning" text="dark" className="ms-2">
+        Validation requise
+      </Badge>
+    )}
+  </span>
+)}
                         </div>
 
                         {/* Ligne 3: Notes d'assignation */}
@@ -466,21 +471,33 @@ export default function WorkflowPage() {
   };
 
   
-  const generateTasks = async () => {
-    try {
-      const prompt = `Voici le nom d'un workflow : ${workflow.name} et sa description : ${workflow.description}.\nGénère une liste de tâches au format JSON, chaque tâche doit avoir les champs suivants : title, description et due_date.`;
-      await axios.post(
-        `http://localhost:5000/api/workflows/${id}/generate-tasks`, 
-        { prompt }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success('Tâches générées avec succès');
-      setHasGeneratedTasks(true); // Marquer comme généré
-      fetchAll();
-    } catch {
-      toast.error("Erreur lors de la génération des tâches");
-    }
-  };
+const generateTasks = async () => {
+  try {
+    const prompt = `Voici le nom d'un workflow : ${workflow.name} et sa description : ${workflow.description}.\n
+    Génère une liste de tâches au format JSON, chaque tâche doit avoir les champs suivants : 
+    title, description, due_date (au format YYYY-MM-DD) et type (validation/operation). 
+    Inclure au moins une tâche de type 'validation' pour le directeur.`;
+    
+    const response = await axios.post(
+      `http://localhost:5000/api/workflows/${id}/generate-tasks`, 
+      { prompt }, 
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    // Assigner automatiquement les tâches
+    await axios.post(
+      `http://localhost:5000/api/workflows/${id}/assign-tasks`,
+      {},
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    toast.success('Tâches générées et assignées avec succès');
+    setHasGeneratedTasks(true);
+    fetchAll();
+  } catch (err) {
+    toast.error(err.response?.data?.message || "Erreur lors de la génération des tâches");
+  }
+};
   const handleEditTask = (task) => {
     setEditingTask(task);
     setTaskForm({

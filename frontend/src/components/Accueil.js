@@ -71,7 +71,7 @@ const Accueil = () => {
     const config = { headers: { Authorization: `Bearer ${token}` } };
 
     // Récupérer les statistiques
-    axios.get("http://localhost:5000/api/dashboard/stats", config)
+    axios.get("http://localhost:5000/api/documents/stats", config)
       .then(res => setStats(res.data))
       .catch(err => console.error("Erreur stats :", err));
 

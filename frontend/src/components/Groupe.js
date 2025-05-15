@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 import Select from 'react-select';
-import { Modal, Button, Table, Form } from 'react-bootstrap';
+import { Modal, Button, Table, Form, Badge, Container } from 'react-bootstrap';
+import { FiPlus, FiEdit2, FiTrash2, FiUsers } from 'react-icons/fi';
 
 const API = 'http://localhost:5000/api/groups';
 const USERS_API = 'http://localhost:5000/api/auth/users/';
@@ -119,45 +120,99 @@ const Groupe = () => {
 
   const selectedUserOptions = userOptions.filter(opt => form.user_ids.includes(opt.value));
 
-  return (
-    <div className="container-fluid mt-4">
-      <Button variant="success" onClick={() => setShowModal(true)} className="mb-3">
-        Ajouter Groupe
-      </Button>
+    return (
+        <div className="groups-page">
+            <style>
+                {`
+                .groups-page {
+                    background-color: transparent;
+                }
+                .groups-table {
+                    background-color: white;
+                    border-radius: 10px;
+                    box-shadow: 0 2px 15px rgba(0, 0, 0, 0.05);
+                }
+                .table-header {
+                    background-color: #f8f9fa;
+                }
+                .user-badge {
+                    background-color: #e9ecef;
+                    color: #495057;
+                    margin: 2px;
+                    padding: 4px 8px;
+                    border-radius: 12px;
+                    font-size: 0.8rem;
+                }
+                .action-btn {
+                    padding: 0.25rem 0.5rem;
+                    font-size: 0.875rem;
+                }
+                `}
+            </style>
 
-      <Table striped bordered hover responsive>
-        <thead>
-          <tr>
-            <th>Nom</th>
-            <th>Description</th>
-            <th>Utilisateurs</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map(g => (
-            <tr key={g.id}>
-              <td>{g.nom}</td>
-              <td>{g.description}</td>
-              <td>
-                {g.user_ids?.map(id => (
-                  <div key={id}>{getUserName(id)}</div>
-                ))}
-              </td>
-              <td>
-                <Button size="sm" variant="warning" className="me-2" onClick={() => handleEdit(g)}>
-                  Modifier
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => confirmDelete(g.id)}>
-                  Supprimer
-                </Button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
+            <Container fluid>
+                <div className="d-flex justify-content-between align-items-center mb-4">
+                    <h2 className="mb-0">Groupes</h2>
+                    <Button 
+                        variant="success" 
+                        onClick={() => setShowModal(true)}
+                        className="d-flex align-items-center"
+                    >
+                        <FiPlus className="me-2" /> Ajouter un groupe
+                    </Button>
+                </div>
 
-      {/* Modal Ajout / Modification */}
+                <div className="groups-table p-3">
+                    <Table hover responsive>
+                        <thead className="table-header">
+                            <tr>
+                                <th>Nom</th>
+                                <th>Description</th>
+                                <th>Membres</th>
+                                <th className="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {groups.map(g => (
+                                <tr key={g.id}>
+                                    <td className="fw-semibold">{g.nom}</td>
+                                    <td>{g.description || '-'}</td>
+                                    <td>
+                                        <div className="d-flex flex-wrap">
+                                            {g.user_ids?.map(id => (
+                                                <Badge key={id} className="user-badge d-flex align-items-center">
+                                                    <FiUsers className="me-1" size={12} />
+                                                    {getUserName(id)}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </td>
+                                    <td className="text-end">
+                                        <Button
+                                            variant="outline-warning"
+                                            size="sm"
+                                            className="action-btn me-2"
+                                            onClick={() => handleEdit(g)}
+                                        >
+                                            <FiEdit2 />
+                                        </Button>
+                                        <Button
+                                            variant="outline-danger"
+                                            size="sm"
+                                            className="action-btn"
+                                            onClick={() => confirmDelete(g.id)}
+                                        >
+                                            <FiTrash2 />
+                                        </Button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </Table>
+                </div>
+
+                {/* [Les modals existants restent inchangés...] */}
+                {/* Modal Ajout / Modification */}
       <Modal show={showModal} onHide={resetForm} style={{ zIndex: 1050 }}
   backdrop="static"
   centered>
@@ -222,8 +277,9 @@ const Groupe = () => {
           <Button variant="danger" onClick={handleDelete}>Supprimer</Button>
         </Modal.Footer>
       </Modal>
-    </div>
-  );
+            </Container>
+        </div>
+    );
 };
 
 export default Groupe;

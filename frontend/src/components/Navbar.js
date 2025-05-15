@@ -21,10 +21,22 @@ const Navbar = () => {
 
   const showSidebar = () => setSidebar(!sidebar);
 
-  const handleLogout = () => {
+  // Dans Navbar.js
+const handleLogout = async () => {
+  try {
+    await axios.post('http://localhost:5000/api/auth/logout', {}, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`
+      }
+    });
     localStorage.removeItem("token");
     navigate('/');
-  };
+  } catch (err) {
+    console.error("Erreur lors de la déconnexion:", err);
+    localStorage.removeItem("token");
+    navigate('/');
+  }
+};
 
   // Décoder JWT pour récupérer userId
   useEffect(() => {
@@ -123,7 +135,7 @@ const Navbar = () => {
     },
     {
       title: 'Archive',
-      path: currentUser?.role === 'admin' ? '/archiveadmin' : '/archive',
+      path: currentUser?.role === 'admin' ? '/archive' : '/archive',
       icon: <FaIcons.FaArchive />,
     },
     currentUser?.role === 'admin' && {

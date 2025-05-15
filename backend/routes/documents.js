@@ -8,7 +8,9 @@ const pdfParse = require('pdf-parse');
 const Tesseract = require('tesseract.js');
 const { auth } = require('../middleware/auth');
 const router = express.Router();
-
+const axios = require('axios'); 
+const NLP_SERVICE_URL = 'http://localhost:5001/classify';
+const NLP_TIMEOUT = 3000; // 3 secondes timeout
 // PostgreSQL Pool configuration
 const pool = new Pool({
   user: process.env.PG_USER || 'postgres',
@@ -41,60 +43,50 @@ const upload = multer({
 // Fonction de classification des documents (par exemple, CV ou Facture)
 
 
-function classifyText(text) {
-  const lower = text.toLowerCase();
-  
-  // Système de scoring pour éviter le biais du "premier match"
-  const categoryScores = {
-    'contrat': 0,
-    'rapport': 0,
-    'mémoire': 0,
-    'présentation': 0,
-    'note interne': 0,
-    'facture': 0,
-    'cv': 0,
-    'photo': 0,
-  };
+async function classifyText(text) {
+  // Catégories possibles (doivent correspondre à celles du service Python)
+  const defaultCategories = [
+      "contrat", "rapport", "mémoire",
+      "présentation", "note interne",
+      "facture", "cv", "photo"
+  ];
 
-  // Règles de scoring par catégorie (plus il y a de mots-clés, plus le score est élevé)
-  const rules = {
-    'contrat': ['contrat', 'accord', 'article', 'clause', 'signature', 'parties'],
-    'rapport': ['rapport', 'analyse', 'résumé', 'conclusion', 'recommandation', 'données'],
-    'mémoire': ['mémoire', 'thèse', 'recherche', 'chapitre', 'bibliographie', 'hypothèse', 'matière'],
-    'présentation': ['présentation', 'diapositive', 'slide', 'powerpoint', 'ppt', 'keynote'],
-    'note interne': ['note', 'memo', 'interne', 'information', 'circulaire', 'compte-rendu'],
-    'facture': ['facture', 'bon', 'montant', 'fournisseur', '€', 'euro', 'total à payer', 'tva'],
-    'cv': ['curriculum vitae', 'cv', 'expérience', 'compétence', 'formation', 'diplôme'],
-    'photo': ['photo', 'image', 'photographie', 'selfie', 'insta', 'snap', 'pixel', 'camera'],
-  };
+  try {
+      const response = await axios.post(
+          NLP_SERVICE_URL,
+          {
+              text: text,
+              categories: defaultCategories
+          },
+          {
+              timeout: NLP_TIMEOUT,
+              headers: { 'Content-Type': 'application/json' }
+          }
+      );
 
-  // Calcul des scores
-  for (const [category, keywords] of Object.entries(rules)) {
-    keywords.forEach(keyword => {
-      if (lower.includes(keyword)) {
-        categoryScores[category] += 1; // +1 point par mot-clé trouvé
+      return response.data.category;
+      
+  } catch (error) {
+      console.error('Erreur NLP:', error.message);
+      
+      // Fallback manuel si le service est indisponible
+      const lowerText = text.toLowerCase();
+      
+      const keywordMap = {
+          'facture': ['facture', 'bon', 'montant', '€', 'euro', 'total à payer', 'tva'],
+          'contrat': ['contrat', 'accord', 'article', 'clause', 'signature'],
+          'rapport': ['rapport', 'analyse', 'conclusion', 'recommandation'],
+          'cv': ['curriculum vitae', 'cv', 'expérience', 'compétence', 'formation']
+      };
+
+      for (const [category, keywords] of Object.entries(keywordMap)) {
+          if (keywords.some(kw => lowerText.includes(kw))) {
+              return category;
+          }
       }
-    });
+
+      return 'autre';
   }
-
-  // Détection spéciale pour les photos (OCR + texte court)
-  if (lower.split(/\s+/).length < 10 || /(photo|image|insta|snap|pixel)/.test(lower)) {
-    categoryScores['photo'] += 3; // Bonus pour les photos
-  }
-
-  // Trouver la catégorie avec le score le plus élevé
-  let bestCategory = 'autre';
-  let highestScore = 0;
-
-  for (const [category, score] of Object.entries(categoryScores)) {
-    if (score > highestScore) {
-      highestScore = score;
-      bestCategory = category;
-    }
-  }
-
-  // Seuil minimal pour éviter les faux positifs (ex: "article" seul ne signifie pas forcément "contrat")
-  return highestScore >= 2 ? bestCategory : 'autre';
 }
 
 // GET : récupérer les utilisateurs ayant accès à un document spécifique
@@ -123,7 +115,6 @@ async function initializeDatabase() {
     // Table pour les documents
     await pool.query(`
       CREATE TABLE IF NOT EXISTS documents (
-<<<<<<< HEAD
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   file_path TEXT NOT NULL,
@@ -137,19 +128,6 @@ async function initializeDatabase() {
   original_id INTEGER,
   ocr_text TEXT,
   date TIMESTAMP DEFAULT NOW()
-=======
-      id SERIAL PRIMARY KEY,
-      name TEXT NOT NULL,
-      file_path TEXT NOT NULL,
-      category TEXT,
-      text_content TEXT,
-      owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-      visibility VARCHAR(20) DEFAULT 'private',
-      date TIMESTAMP DEFAULT NOW(),
-      is_archived BOOLEAN DEFAULT FALSE,
-    version INTEGER DEFAULT 1,
-    original_id INTEGER
->>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 );
 
 
@@ -195,7 +173,6 @@ async function initializeDatabase() {
 
 router.get('/', auth, async (req, res) => {
   const userId = req.user.id;
-<<<<<<< HEAD
   const isAdmin = req.user.role === 'admin'; // Adapte si nécessaire
 
   try {
@@ -226,25 +203,6 @@ router.get('/', auth, async (req, res) => {
         [userId]
       );
     }
-=======
-
-  try {
-    const result = await pool.query(
-      `
-      SELECT DISTINCT d.*, dc.is_saved, dc.collection_name
-      FROM documents d
-      JOIN document_permissions dp ON dp.document_id = d.id
-      LEFT JOIN document_collections dc ON dc.document_id = d.id
-      WHERE 
-      d.is_archived = false AND
-      (dp.access_type = 'public'
-      OR (dp.user_id = $1 AND dp.access_type = 'custom')
-      OR (dp.user_id = $1 AND dp.access_type = 'read'))
-      ORDER BY d.date DESC;
-      `,
-      [userId]
-    );
->>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 
     res.status(200).json(result.rows);
   } catch (err) {
@@ -252,11 +210,8 @@ router.get('/', auth, async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
   }
 });
-<<<<<<< HEAD
-=======
 
 // upload document
->>>>>>> 5b071d7067d1dba2e4f2fd70fe4791c3442f5e0f
 router.post('/', auth, upload.single('file'), async (req, res) => {
   let { name, access, allowedUsers, summary, tags, prio } = req.body;
   summary = summary || '';
@@ -272,7 +227,7 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
 
   try {
     let extractedText = '';
-
+    
     // OCR ou parsing PDF
     if (mimeType === 'application/pdf') {
       const dataBuffer = fs.readFileSync(fullPath);
@@ -286,7 +241,9 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
     }
 
     // Classification automatique si besoin
-    let finalCategory = classifyText(extractedText);
+    let finalCategory = await classifyText(extractedText);
+        console.log(`Document classé comme: ${finalCategory}`);
+
 
     // Recherche d'une version existante
     const existing = await pool.query(
@@ -445,6 +402,26 @@ router.post('/:id/share', auth, async (req, res) => {
   }
 });
 
+router.get('/stats', async (req, res) => {
+  try {
+    const usersResult = await pool.query('SELECT COUNT(*) FROM users');
+    const documentsResult = await pool.query('SELECT COUNT(*) FROM documents');
+    const tasksResult = await pool.query('SELECT COUNT(*) FROM tasks');
+    const workflowsResult = await pool.query('SELECT COUNT(*) FROM workflow');
+    const notificationsResult = await pool.query('SELECT COUNT(*) FROM notifications');
+
+    res.json({
+      totalUsers: parseInt(usersResult.rows[0].count, 10),
+      totalDocuments: parseInt(documentsResult.rows[0].count, 10),
+      totalTasks: parseInt(tasksResult.rows[0].count, 10),
+      totalWorkflows: parseInt(workflowsResult.rows[0].count, 10),
+      totalNotifications: parseInt(notificationsResult.rows[0].count, 10),
+    });
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
 
 // GET : récupérer un document spécifique par ID
 router.get('/:id', auth, async (req, res) => {
@@ -525,75 +502,6 @@ router.patch('/:id/visibility', auth, async (req, res) => {
   }
 });
 
-
-// 📈 Ajout des statistiques dans le backend
-router.get('/stats', auth, async (req, res) => {
-  try {
-    const [
-      userCountResult,
-      documentCountResult,
-      collectionCountResult,
-      taskCountResult,
-      workflowCountResult,
-      documentPerUserResult,
-      taskStatusResult
-    ] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM users'),
-      pool.query('SELECT COUNT(*) FROM documents'),
-      pool.query('SELECT COUNT(*) FROM collections'),
-      pool.query('SELECT COUNT(*) FROM tasks'),
-      pool.query('SELECT COUNT(*) FROM workflow'),
-      pool.query(`
-        SELECT u.id, u.name, u.prenom, COUNT(d.id) AS document_count
-        FROM users u
-        LEFT JOIN documents d ON u.id = d.owner_id
-        GROUP BY u.id
-        ORDER BY document_count DESC
-        LIMIT 5
-      `),
-      pool.query(`
-        SELECT status, COUNT(*) AS count
-        FROM tasks
-        GROUP BY status
-      `)
-    ]);
-
-    res.status(200).json({
-      totalUsers: parseInt(userCountResult.rows[0].count, 10),
-      totalDocuments: parseInt(documentCountResult.rows[0].count, 10),
-      totalCollections: parseInt(collectionCountResult.rows[0].count, 10),
-      totalTasks: parseInt(taskCountResult.rows[0].count, 10),
-      totalWorkflows: parseInt(workflowCountResult.rows[0].count, 10),
-      topDocumentOwners: documentPerUserResult.rows,
-      taskStatusDistribution: taskStatusResult.rows
-    });
-  } catch (error) {
-    console.error('Erreur récupération statistiques :', error);
-    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques' });
-  }
-});
-
-
-router.get('/stats', async (req, res) => {
-  try {
-    const usersResult = await pool.query('SELECT COUNT(*) FROM users');
-    const documentsResult = await pool.query('SELECT COUNT(*) FROM documents');
-    const tasksResult = await pool.query('SELECT COUNT(*) FROM tasks');
-    const workflowsResult = await pool.query('SELECT COUNT(*) FROM workflow');
-    const notificationsResult = await pool.query('SELECT COUNT(*) FROM notifications');
-
-    res.json({
-      totalUsers: parseInt(usersResult.rows[0].count, 10),
-      totalDocuments: parseInt(documentsResult.rows[0].count, 10),
-      totalTasks: parseInt(tasksResult.rows[0].count, 10),
-      totalWorkflows: parseInt(workflowsResult.rows[0].count, 10),
-      totalNotifications: parseInt(notificationsResult.rows[0].count, 10),
-    });
-  } catch (error) {
-    console.error('Erreur lors de la récupération des statistiques :', error);
-    res.status(500).json({ error: 'Erreur serveur' });
-  }
-});
 
 router.post('/', async (req, res) => {
   const { text } = req.body;
