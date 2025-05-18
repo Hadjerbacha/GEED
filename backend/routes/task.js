@@ -96,7 +96,19 @@ router.get('/:id/bpmn', async (req, res) => {
       return res.status(404).json({ error: 'Aucune tâche trouvée pour ce workflow.' });
     }
 
-    const taskPositions = tasks.map((_, i) => 200 + i * 120); // x-positions des tâches
+    let currentX = 200;
+const taskPositions = [];
+
+tasks.forEach((task, index) => {
+  taskPositions.push(currentX);
+  // Si c'est une tâche de validation, prévoir un espace pour la gateway (ex: +150)
+  if (task.type === 'validation') {
+    currentX += 250; // +100 pour la tâche +150 pour la gateway
+  } else {
+    currentX += 120; // distance normale
+  }
+});
+
 
     let bpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -110,6 +122,7 @@ router.get('/:id/bpmn', async (req, res) => {
   <bpmn:process id="workflow_${id}" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="Début"/>`;
 
+    // Ajouter les tâches
     tasks.forEach(task => {
       const taskTitle = escapeXml(task.title);
       bpmnXml += `\n    <bpmn:task id="Task_${task.id}" name="${taskTitle}"/>`;
@@ -117,11 +130,42 @@ router.get('/:id/bpmn', async (req, res) => {
 
     bpmnXml += `\n    <bpmn:endEvent id="EndEvent_1" name="Fin"/>`;
 
+    // Ajouter les XOR gateways pour les tâches conditionnelles
+    tasks.forEach((task, index) => {
+      if (task.type === 'validation') {
+        const gatewayId = `Gateway_${task.id}`;
+        
+        // Ajouter le gateway XOR
+        bpmnXml += `\n    <bpmn:exclusiveGateway id="${gatewayId}" name="Décision ${index + 1}"/>`;
+        
+        // Ajouter les séquences flows conditionnels
+        bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${task.id}_approved" sourceRef="${gatewayId}" targetRef="Task_${task.id}">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${approved == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>`;
+        
+        bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${task.id}_rejected" sourceRef="${gatewayId}" targetRef="EndEvent_1">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${approved == false}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>`;
+      }
+    });
+
     // Flux de séquence logique
     bpmnXml += `\n    <bpmn:sequenceFlow id="flow_start" sourceRef="StartEvent_1" targetRef="Task_${tasks[0].id}"/>`;
+    
     for (let i = 0; i < tasks.length - 1; i++) {
-      bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${i}" sourceRef="Task_${tasks[i].id}" targetRef="Task_${tasks[i + 1].id}"/>`;
+      const currentTask = tasks[i];
+      const nextTask = tasks[i + 1];
+      
+      if (currentTask.type === 'validation') {
+        // Pour les tâches de validation, le flux va vers le gateway
+        bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${i}" sourceRef="Task_${currentTask.id}" targetRef="Gateway_${currentTask.id}"/>`;
+      } else {
+        // Pour les tâches normales, flux direct vers la suivante
+        bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${i}" sourceRef="Task_${currentTask.id}" targetRef="Task_${nextTask.id}"/>`;
+      }
     }
+    
+    // Dernier flux (sans condition)
     bpmnXml += `\n    <bpmn:sequenceFlow id="flow_end" sourceRef="Task_${tasks[tasks.length - 1].id}" targetRef="EndEvent_1"/>`;
 
     // BPMN Diagram
@@ -134,33 +178,73 @@ router.get('/:id/bpmn', async (req, res) => {
         <dc:Bounds x="100" y="100" width="36" height="36"/>
       </bpmndi:BPMNShape>`;
 
+    // Positionnement des éléments
     tasks.forEach((task, i) => {
       const x = taskPositions[i];
       bpmnXml += `
       <bpmndi:BPMNShape id="Task_${task.id}_di" bpmnElement="Task_${task.id}">
         <dc:Bounds x="${x}" y="90" width="100" height="80"/>
       </bpmndi:BPMNShape>`;
+      
+      // Ajouter le gateway si c'est une tâche de validation
+      if (task.type === 'validation') {
+        const gatewayX = x + 150;
+        bpmnXml += `
+      <bpmndi:BPMNShape id="Gateway_${task.id}_di" bpmnElement="Gateway_${task.id}" isMarkerVisible="true">
+        <dc:Bounds x="${gatewayX}" y="105" width="50" height="50"/>
+      </bpmndi:BPMNShape>`;
+      }
     });
 
-    const endX = 200 + tasks.length * 120;
+    const endX = currentX;
+
     bpmnXml += `
       <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
         <dc:Bounds x="${endX}" y="100" width="36" height="36"/>
-      </bpmndi:BPMNShape>
+      </bpmndi:BPMNShape>`;
 
+    // Connexions
+    bpmnXml += `
       <bpmndi:BPMNEdge id="flow_start_edge" bpmnElement="flow_start">
         <di:waypoint x="136" y="118"/>
         <di:waypoint x="${taskPositions[0]}" y="130"/>
       </bpmndi:BPMNEdge>`;
 
     for (let i = 0; i < tasks.length - 1; i++) {
-      const sourceX = taskPositions[i] + 100; // fin de la tâche
-      const targetX = taskPositions[i + 1];   // début de la tâche suivante
-      bpmnXml += `
+      const currentTask = tasks[i];
+      const nextTask = tasks[i + 1];
+      
+      if (currentTask.type === 'validation') {
+        // Flèche de la tâche vers le gateway
+        const sourceX = taskPositions[i] + 100;
+        const gatewayX = taskPositions[i] + 150;
+        bpmnXml += `
+      <bpmndi:BPMNEdge id="flow_${i}_edge" bpmnElement="flow_${i}">
+        <di:waypoint x="${sourceX}" y="130"/>
+        <di:waypoint x="${gatewayX}" y="130"/>
+      </bpmndi:BPMNEdge>`;
+        
+        // Flèches du gateway vers les options
+        bpmnXml += `
+      <bpmndi:BPMNEdge id="flow_${i}_approved_edge" bpmnElement="flow_${currentTask.id}_approved">
+        <di:waypoint x="${gatewayX + 50}" y="130"/>
+        <di:waypoint x="${taskPositions[i + 1]}" y="130"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="flow_${i}_rejected_edge" bpmnElement="flow_${currentTask.id}_rejected">
+        <di:waypoint x="${gatewayX + 25}" y="155"/>
+        <di:waypoint x="${endX}" y="155"/>
+        <di:waypoint x="${endX}" y="118"/>
+      </bpmndi:BPMNEdge>`;
+      } else {
+        // Flèche normale entre tâches
+        const sourceX = taskPositions[i] + 100;
+        const targetX = taskPositions[i + 1];
+        bpmnXml += `
       <bpmndi:BPMNEdge id="flow_${i}_edge" bpmnElement="flow_${i}">
         <di:waypoint x="${sourceX}" y="130"/>
         <di:waypoint x="${targetX}" y="130"/>
       </bpmndi:BPMNEdge>`;
+      }
     }
 
     bpmnXml += `
@@ -168,7 +252,6 @@ router.get('/:id/bpmn', async (req, res) => {
         <di:waypoint x="${taskPositions[taskPositions.length - 1] + 100}" y="130"/>
         <di:waypoint x="${endX}" y="118"/>
       </bpmndi:BPMNEdge>
-
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>`;
@@ -176,9 +259,98 @@ router.get('/:id/bpmn', async (req, res) => {
     res.set('Content-Type', 'application/xml');
     res.send(bpmnXml);
 
+    // Dans la route /:id/bpmn
+tasks.forEach((task, index) => {
+  // Modifier la partie des gateways comme ceci :
+if (task.type === 'validation' || task.status === 'cancelled') {
+  const gatewayId = `Gateway_${task.id}`;
+  
+  // Ajouter le gateway XOR
+  bpmnXml += `\n    <bpmn:exclusiveGateway id="${gatewayId}" name="Décision ${index + 1}"/>`;
+  
+  // Flux pour approbation (si validation)
+  if (task.type === 'validation') {
+    bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${task.id}_approved" sourceRef="${gatewayId}" targetRef="Task_${task.id}">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${approved == true}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>`;
+  }
+  
+  // Flux pour annulation
+  bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${task.id}_cancelled" sourceRef="${gatewayId}" targetRef="Task_Reassign_${task.id}">
+    <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${status == 'cancelled'}</bpmn:conditionExpression>
+  </bpmn:sequenceFlow>`;
+  
+  // Flux par défaut (si ni approuvé ni annulé)
+  bpmnXml += `\n    <bpmn:sequenceFlow id="flow_${task.id}_default" sourceRef="${gatewayId}" targetRef="EndEvent_1">
+    <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">\${approved == false &amp;&amp; status != 'cancelled'}</bpmn:conditionExpression>
+  </bpmn:sequenceFlow>`;
+  
+  // Ajouter une tâche de réassignation
+  bpmnXml += `\n    <bpmn:task id="Task_Reassign_${task.id}" name="Réassigner ${escapeXml(task.title)}"/>`;
+  
+  // Flux de la tâche de réassignation vers la tâche originale
+  bpmnXml += `\n    <bpmn:sequenceFlow id="flow_reassign_${task.id}" sourceRef="Task_Reassign_${task.id}" targetRef="Task_${task.id}"/>`;
+}
+});
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Erreur lors de la génération BPMN.' });
+  }
+});
+
+// Modifier la route de réassignation :
+// Modifier la route comme ceci :
+router.post('/:workflowId/tasks/:taskId/reassign', authMiddleware, async (req, res) => {
+  const { workflowId, taskId } = req.params;
+  const { newAssigneeId, reason } = req.body;
+  const userId = req.user.id;
+
+  try {
+    // 1. Vérifier que la tâche existe et appartient au workflow
+    const taskRes = await pool.query(
+      'SELECT * FROM tasks WHERE id = $1 AND workflow_id = $2',
+      [taskId, workflowId]
+    );
+
+    if (taskRes.rowCount === 0) {
+      return res.status(404).json({ error: 'Tâche non trouvée dans ce workflow' });
+    }
+
+    // 2. Vérifier que le nouvel assigné existe
+    const userRes = await pool.query(
+      'SELECT id FROM users WHERE id = $1',
+      [newAssigneeId]
+    );
+
+    if (userRes.rowCount === 0) {
+      return res.status(400).json({ error: 'Utilisateur assigné non trouvé' });
+    }
+
+    // 3. Mettre à jour la tâche avec le nouveau statut
+    await pool.query(
+      `UPDATE tasks 
+       SET 
+         assigned_to = $1,
+         status = 'pending', // Réinitialiser le statut
+         assignment_note = COALESCE(assignment_note, '') || $2,
+         updated_at = NOW()
+       WHERE id = $3`,
+      [[newAssigneeId], `\nRéassignée le ${new Date().toLocaleString()} par ${userId}. Raison: ${reason || 'non spécifiée'}\n`, taskId]
+    );
+
+    // 4. Journaliser l'action
+    await logWorkflowAction(
+      workflowId,
+      `Tâche ${taskId} réassignée à ${newAssigneeId} par ${userId}`,
+      'reassignment'
+    );
+
+    res.json({ success: true, message: 'Tâche réassignée avec succès' });
+
+  } catch (err) {
+    console.error('Erreur de réassignation:', err);
+    res.status(500).json({ error: 'Erreur lors de la réassignation' });
   }
 });
 
@@ -340,6 +512,15 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
     let tasks = [];
     try {
       tasks = JSON.parse(cleanedText);
+      
+      // Marquer certaines tâches comme validation
+      tasks.forEach(task => {
+        if (task.title.toLowerCase().includes('validation') || task.title.toLowerCase().includes('approval')) {
+          task.type = 'validation';
+        } else {
+          task.type = 'operation';
+        }
+      });
     } catch (err) {
       console.error("Erreur de parsing JSON:", err);
       return res.status(500).json({ error: "Réponse mal formatée par Gemini." });
@@ -349,12 +530,12 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
     const insertedTasks = [];
 
     for (const task of tasks) {
-      const { title, description, due_date } = task;
+      const { title, description, due_date, type } = task;
 
       const result = await pool.query(
-        `INSERT INTO tasks (title, description, due_date, workflow_id)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [title, description || "", due_date || null, workflowId]
+        `INSERT INTO tasks (title, description, due_date, workflow_id, type)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [title, description || "", due_date || null, workflowId, type || 'operation']
       );
 
       insertedTasks.push(result.rows[0]);
@@ -365,7 +546,7 @@ router.post("/:id/generate-tasks", authMiddleware, async (req, res) => {
     console.error("Erreur lors de la génération ou insertion :", error);
     res.status(500).json({ error: "Erreur serveur lors de la génération de tâches." });
   }
-}); 
+});
 
 // Route pour analyser les logs avec Gemini
   router.post('/:id/analyze-logs', authMiddleware, async (req, res) => {

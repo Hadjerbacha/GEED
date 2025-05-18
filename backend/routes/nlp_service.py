@@ -1,86 +1,80 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse  # <-- Ajoutez cette importation
 from transformers import pipeline
-import asyncio
 from pydantic import BaseModel
 import logging
 from fastapi.middleware.cors import CORSMiddleware
 
-# Configuration du logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 app = FastAPI(title="NLP Classification Service")
 
-# Autoriser les requêtes CORS (à adapter selon vos besoins)
+# Configuration CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Modèle de requête
 class ClassificationRequest(BaseModel):
     text: str
     categories: list[str] | None = None
 
-# Chargement du modèle au démarrage
-@app.on_event("startup")
-async def load_model():
-    global classifier
-    try:
-        logger.info("Chargement du modèle NLP...")
-        classifier = pipeline(
-            "zero-shot-classification",
-            model="facebook/bart-large-mnli",
-            device="cpu"  # Changez à "cuda" si vous avez un GPU
-        )
-        logger.info("Modèle chargé avec succès")
-    except Exception as e:
-        logger.error(f"Erreur de chargement du modèle: {str(e)}")
-        raise
+# Utilisez un modèle plus léger pour de meilleures performances
+# Dans nlp_service.py
+classifier = pipeline(
+    "zero-shot-classification",
+    model="typeform/distilbert-base-uncased-mnli",  # modèle plus léger
+    device=-1,  # CPU (ou 0 si GPU disponible)
+    framework="pt"
+)
 
 @app.post("/classify")
 async def classify_document(request: ClassificationRequest):
     try:
-        # Catégories par défaut si non spécifiées
-        categories = request.categories or [
-            "contrat", "rapport", "mémoire", 
-            "présentation", "note interne", 
-            "facture", "cv", "photo"
-        ]
+        if not request.text or len(request.text) < 20:
+            return {"category": "autre", "confidence": 0.0}
+            
+        text = request.text[:1024]  # Limitez encore plus
+        categories = request.categories or ["contrat","facture", "rapport",  "cv", "autre"]
         
-        # Classification
+        # Ajoutez un timeout pour la classification
         result = classifier(
-            request.text, 
+            text,
             candidate_labels=categories,
             multi_label=False
         )
         
         return {
             "category": result["labels"][0],
-            "confidence": float(result["scores"][0]),
-            "all_predictions": dict(zip(result["labels"], result["scores"]))
+            "confidence": float(result["scores"][0])
         }
         
     except Exception as e:
-        logger.error(f"Erreur de classification: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Erreur de traitement NLP: {str(e)}"
-        )
+        logging.error(f"Erreur de classification: {str(e)}")
+        return {"category": "autre", "confidence": 0.0}
+    
 
-# Route de santé
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+@app.middleware("http")
+async def add_cors_header(request, call_next):
+    response = await call_next(request)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, GET, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return response
+
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         app, 
-        host="0.0.0.0",  # Écoute sur toutes les interfaces
+        host="0.0.0.0",
         port=5001,
-        log_level="info",
+        workers=1,  # Réduire à 1 worker pour éviter les conflits
         timeout_keep_alive=30
     )
+

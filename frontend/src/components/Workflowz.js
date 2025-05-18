@@ -40,7 +40,8 @@ const priorityColors = {
 const TaskCard = ({ task, onComplete, onEdit, onDelete }) => {
   const dueDate = task.due_date ? parseISO(task.due_date) : null;
   const isOverdue = dueDate && dueDate < new Date() && task.status !== 'completed';
-
+ const [showReassignModal, setShowReassignModal] = useState(false);
+const [taskToReassign, setTaskToReassign] = useState(null);
   return (
     <motion.div 
       whileHover={{ y: -2, boxShadow: '0 4px 8px rgba(0,0,0,0.1)' }}
@@ -103,6 +104,17 @@ const TaskCard = ({ task, onComplete, onEdit, onDelete }) => {
   onClick={() => onDelete(task.id)}
 >
   <FiTrash2 /> Supprimer
+</Button>
+<Button 
+  variant="outline-warning" 
+  size="sm" 
+  className="ms-2"
+  onClick={() => {
+    setTaskToReassign(task);
+    setShowReassignModal(true);
+  }}
+>
+  <FiUserPlus /> Réassigner
 </Button>
             </div>
           </div>
@@ -359,6 +371,12 @@ export default function WorkflowPage() {
   const [editingTask, setEditingTask] = useState(null);
   const [hasGeneratedTasks, setHasGeneratedTasks] = useState(false);
   const [tasks, setTasks] = useState([]); // État pour stocker les tâches
+  const [showReassignModal, setShowReassignModal] = useState(false);
+  const [newAssignee, setNewAssignee] = useState("");
+  const [reassignReason, setReassignReason] = useState("");
+  const [taskToReassign, setTaskToReassign] = useState(null);
+
+
   const [taskForm, setTaskForm] = useState({ 
     title: '', 
     description: '', 
@@ -624,6 +642,35 @@ const generateTasks = async () => {
   checkAndArchive();
 }, [workflow?.status, id, token]);
   
+
+const handleReassign = async (taskId) => {
+  try {
+    if (!newAssignee) {
+      toast.error("Veuillez sélectionner un nouvel assigné");
+      return;
+    }
+
+    const response = await axios.post(
+      `http://localhost:5000/api/workflows/${id}/tasks/${taskId}/reassign`,
+      {
+        newAssigneeId: newAssignee.value, // Utiliser .value car c'est un Select
+        reason: reassignReason
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    if (response.data.success) {
+      toast.success('Tâche réassignée avec succès');
+      setShowReassignModal(false);
+      fetchAll();
+    } else {
+      toast.error(response.data.error || "Erreur lors de la réassignation");
+    }
+  } catch (err) {
+    toast.error(err.response?.data?.error || "Erreur lors de la réassignation");
+  }
+};
+
   if (loading) {
     return (
       <div className="d-flex justify-content-center align-items-center vh-100">
@@ -816,6 +863,46 @@ const generateTasks = async () => {
           </Button>
         </Modal.Footer>
       </Modal>
+      {/* Modal de réassignation */}
+<Modal show={showReassignModal} onHide={() => setShowReassignModal(false)}>
+  <Modal.Header closeButton>
+    <Modal.Title>Réassigner la tâche: {taskToReassign?.title}</Modal.Title>
+  </Modal.Header>
+  <Modal.Body>
+    <Form>
+      <Form.Group className="mb-3">
+        <Form.Label>Nouvel assigné</Form.Label>
+        <Select
+          options={users}
+          onChange={(selected) => setNewAssignee(selected.value)}
+          placeholder="Sélectionner un utilisateur..."
+        />
+      </Form.Group>
+      <Form.Group className="mb-3">
+        <Form.Label>Raison</Form.Label>
+        <Form.Control
+          as="textarea"
+          rows={3}
+          value={reassignReason}
+          onChange={(e) => setReassignReason(e.target.value)}
+          placeholder="Pourquoi réassigner cette tâche?"
+        />
+      </Form.Group>
+    </Form>
+  </Modal.Body>
+  <Modal.Footer>
+    <Button variant="secondary" onClick={() => setShowReassignModal(false)}>
+      Annuler
+    </Button>
+    <Button variant="warning" onClick={() => {
+      handleReassign(taskToReassign.id);
+      setShowReassignModal(false);
+    }}>
+      Confirmer la réassignation
+    </Button>
+  </Modal.Footer>
+</Modal>
+
     </>
   );
 }

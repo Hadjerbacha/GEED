@@ -10,7 +10,7 @@ const { auth } = require('../middleware/auth');
 const router = express.Router();
 const axios = require('axios'); 
 const NLP_SERVICE_URL = 'http://localhost:5001/classify';
-const NLP_TIMEOUT = 3000; // 3 secondes timeout
+const NLP_TIMEOUT =  30000; // 30 secondes timeout
 // PostgreSQL Pool configuration
 const pool = new Pool({
   user: process.env.PG_USER || 'postgres',
@@ -43,51 +43,53 @@ const upload = multer({
 // Fonction de classification des documents (par exemple, CV ou Facture)
 
 
-async function classifyText(text) {
-  // Catégories possibles (doivent correspondre à celles du service Python)
-  const defaultCategories = [
-      "contrat", "rapport", "mémoire",
-      "présentation", "note interne",
-      "facture", "cv", "photo"
-  ];
+// Modifiez la fonction classifyText
+const classifyText = async (text) => {
+  const defaultCategories = ["contrat", "facture", "rapport", "cv"];
+
+  const truncatedText = text.substring(0, 5000);
 
   try {
-      const response = await axios.post(
-          NLP_SERVICE_URL,
-          {
-              text: text,
-              categories: defaultCategories
-          },
-          {
-              timeout: NLP_TIMEOUT,
-              headers: { 'Content-Type': 'application/json' }
-          }
-      );
-
-      return response.data.category;
-      
-  } catch (error) {
-      console.error('Erreur NLP:', error.message);
-      
-      // Fallback manuel si le service est indisponible
-      const lowerText = text.toLowerCase();
-      
-      const keywordMap = {
-          'facture': ['facture', 'bon', 'montant', '€', 'euro', 'total à payer', 'tva'],
-          'contrat': ['contrat', 'accord', 'article', 'clause', 'signature'],
-          'rapport': ['rapport', 'analyse', 'conclusion', 'recommandation'],
-          'cv': ['curriculum vitae', 'cv', 'expérience', 'compétence', 'formation']
-      };
-
-      for (const [category, keywords] of Object.entries(keywordMap)) {
-          if (keywords.some(kw => lowerText.includes(kw))) {
-              return category;
-          }
+    const response = await axios.post(
+      'http://127.0.0.1:5001/classify',
+      {
+        text: truncatedText,
+        categories: defaultCategories
+      },
+      {
+        timeout: 10000, // max 10 secondes
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        }
       }
+    );
 
-      return 'autre';
+    return response.data?.category || null;
+
+  } catch (error) {
+    console.error('Erreur NLP (ou timeout dépassé) :', error.message);
+    
+    // 🔁 Fallback simple basé sur des mots-clés
+    const lowerText = text.toLowerCase();
+
+    if (lowerText.includes('contrat') || lowerText.includes('agreement') || lowerText.includes('signature')) {
+      return 'contrat';
+    }
+    if (lowerText.includes('facture') || lowerText.includes('invoice') || lowerText.includes('paiement')) {
+      return 'facture';
+    }
+    if (lowerText.includes('rapport') || lowerText.includes('report') || lowerText.includes('analyse')) {
+      return 'rapport';
+    }
+    if (lowerText.includes('cv') || lowerText.includes('curriculum') || lowerText.includes('expérience') || lowerText.includes('compétence')) {
+      return 'cv';
+    }
+
+    return 'autre'; // Fallback final si rien ne correspond
   }
-}
+};
+
 
 // GET : récupérer les utilisateurs ayant accès à un document spécifique
 router.get('/:id/permissions', auth, async (req, res) => {
@@ -133,17 +135,36 @@ async function initializeDatabase() {
 
     `);
 
-    // Table pour les collections
+     // Table pour les versions de documents
     await pool.query(`
-      CREATE TABLE IF NOT EXISTS collections (
+      CREATE TABLE IF NOT EXISTS document_versions (
         id SERIAL PRIMARY KEY,
-        name TEXT NOT NULL,
-        user_id INTEGER NOT NULL, 
+        document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+        version INTEGER NOT NULL,
+        name TEXT,
+        file_path TEXT,
+        category TEXT,
+        text_content TEXT,
+        summary TEXT,
+        tags TEXT[],
+        owner_id INTEGER,
+        visibility VARCHAR(20),
+        ocr_text TEXT,
         date TIMESTAMP DEFAULT NOW()
       );
     `);
 
-    // Table de liaison entre documents et collections avec les nouvelles colonnes
+     // Table pour les collections
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS collections (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        user_id INTEGER NOT NULL,
+        date TIMESTAMP DEFAULT NOW()
+      );
+    `);
+
+    // Table de liaison entre documents et collections
     await pool.query(`
       CREATE TABLE IF NOT EXISTS document_collections (
         document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
@@ -156,13 +177,14 @@ async function initializeDatabase() {
 
     // Table pour les permissions des documents
     await pool.query(`
-        CREATE TABLE IF NOT EXISTS document_permissions (
+      CREATE TABLE IF NOT EXISTS document_permissions (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
         access_type VARCHAR(20) DEFAULT 'read'
-       );
+      );
     `);
+
 
 
     console.log('Tables documents, collections, document_collections et document_permissions prêtes');
@@ -332,7 +354,52 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   }
 });
 
+// 📈 Ajout des statistiques dans le backend
+router.get('/stats', auth, async (req, res) => {
+  try {
+    const [
+      userCountResult,
+      documentCountResult,
+      collectionCountResult,
+      taskCountResult,
+      workflowCountResult,
+      documentPerUserResult,
+      taskStatusResult
+    ] = await Promise.all([
+      pool.query('SELECT COUNT(*) FROM users'),
+      pool.query('SELECT COUNT(*) FROM documents'),
+      pool.query('SELECT COUNT(*) FROM collections'),
+      pool.query('SELECT COUNT(*) FROM tasks'),
+      pool.query('SELECT COUNT(*) FROM workflow'),
+      pool.query(`
+        SELECT u.id, u.name, u.prenom, COUNT(d.id) AS document_count
+        FROM users u
+        LEFT JOIN documents d ON u.id = d.owner_id
+        GROUP BY u.id
+        ORDER BY document_count DESC
+        LIMIT 5
+      `),
+      pool.query(`
+        SELECT status, COUNT(*) AS count
+        FROM tasks
+        GROUP BY status
+      `)
+    ]);
 
+    res.status(200).json({
+      totalUsers: parseInt(userCountResult.rows[0].count, 10),
+      totalDocuments: parseInt(documentCountResult.rows[0].count, 10),
+      totalCollections: parseInt(collectionCountResult.rows[0].count, 10),
+      totalTasks: parseInt(taskCountResult.rows[0].count, 10),
+      totalWorkflows: parseInt(workflowCountResult.rows[0].count, 10),
+      topDocumentOwners: documentPerUserResult.rows,
+      taskStatusDistribution: taskStatusResult.rows
+    });
+  } catch (error) {
+    console.error('Erreur récupération statistiques :', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques' });
+  }
+});
 
 
 
@@ -479,76 +546,6 @@ router.patch('/:id/visibility', auth, async (req, res) => {
   } catch (err) {
     console.error('Erreur:', err.stack);
     res.status(500).json({ error: 'Erreur serveur', details: err.message });
-  }
-});
-
-
-// 📈 Ajout des statistiques dans le backend
-router.get('/stats', auth, async (req, res) => {
-  try {
-    const [
-      userCountResult,
-      documentCountResult,
-      collectionCountResult,
-      taskCountResult,
-      workflowCountResult,
-      documentPerUserResult,
-      taskStatusResult
-    ] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM users'),
-      pool.query('SELECT COUNT(*) FROM documents'),
-      pool.query('SELECT COUNT(*) FROM collections'),
-      pool.query('SELECT COUNT(*) FROM tasks'),
-      pool.query('SELECT COUNT(*) FROM workflow'),
-      pool.query(`
-        SELECT u.id, u.name, u.prenom, COUNT(d.id) AS document_count
-        FROM users u
-        LEFT JOIN documents d ON u.id = d.owner_id
-        GROUP BY u.id
-        ORDER BY document_count DESC
-        LIMIT 5
-      `),
-      pool.query(`
-        SELECT status, COUNT(*) AS count
-        FROM tasks
-        GROUP BY status
-      `)
-    ]);
-
-    res.status(200).json({
-      totalUsers: parseInt(userCountResult.rows[0].count, 10),
-      totalDocuments: parseInt(documentCountResult.rows[0].count, 10),
-      totalCollections: parseInt(collectionCountResult.rows[0].count, 10),
-      totalTasks: parseInt(taskCountResult.rows[0].count, 10),
-      totalWorkflows: parseInt(workflowCountResult.rows[0].count, 10),
-      topDocumentOwners: documentPerUserResult.rows,
-      taskStatusDistribution: taskStatusResult.rows
-    });
-  } catch (error) {
-    console.error('Erreur récupération statistiques :', error);
-    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques' });
-  }
-});
-
-
-router.get('/stats', async (req, res) => {
-  try {
-    const usersResult = await pool.query('SELECT COUNT(*) FROM users');
-    const documentsResult = await pool.query('SELECT COUNT(*) FROM documents');
-    const tasksResult = await pool.query('SELECT COUNT(*) FROM tasks');
-    const workflowsResult = await pool.query('SELECT COUNT(*) FROM workflow');
-    const notificationsResult = await pool.query('SELECT COUNT(*) FROM notifications');
-
-    res.json({
-      totalUsers: parseInt(usersResult.rows[0].count, 10),
-      totalDocuments: parseInt(documentsResult.rows[0].count, 10),
-      totalTasks: parseInt(tasksResult.rows[0].count, 10),
-      totalWorkflows: parseInt(workflowsResult.rows[0].count, 10),
-      totalNotifications: parseInt(notificationsResult.rows[0].count, 10),
-    });
-  } catch (error) {
-    console.error('Erreur lors de la récupération des statistiques :', error);
-    res.status(500).json({ error: 'Erreur serveur' });
   }
 });
 
