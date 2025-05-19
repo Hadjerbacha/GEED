@@ -10,6 +10,7 @@ import workflowImage from './img/workflow.png';
 import notifImage from './img/notif.jpg';
 import todoImage from './img/todo.jpg';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faUsers } from '@fortawesome/free-solid-svg-icons';
 import { 
   faFileAlt, 
   faTasks, 
@@ -33,6 +34,8 @@ const Accueil = () => {
   const [userId, setUserId] = useState(null);
   const [users, setUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
+  const [isChartLoading, setIsChartLoading] = useState(true);
+  const [allTasks, setAllTasks] = useState([]);
   const [stats, setStats] = useState({
     documents: 0,
     workflows: 0,
@@ -71,109 +74,167 @@ const Accueil = () => {
     const config = { headers: { Authorization: `Bearer ${token}` } };
 
     // Récupérer les statistiques
-    axios.get("http://localhost:5000/api/documents/stats", config)
-      .then(res => setStats(res.data))
-      .catch(err => console.error("Erreur stats :", err));
+    // Dans le useEffect où vous récupérez les stats, changez :
+// Dans le useEffect où vous récupérez les stats :
+axios.get("http://localhost:5000/api/documents/stats", config)
+  .then(res => {
+    if (currentUser?.role === 'admin') {
+      setStats({
+        documents: res.data.totalDocuments,
+        workflows: res.data.totalWorkflows,
+        tasks: res.data.totalTasks,
+        users: res.data.totalUsers
+      });
+    } else {
+      setStats({
+        documents: res.data.userDocuments,
+        workflows: res.data.userWorkflows,
+        tasks: res.data.userTasks
+      });
+    }
+  })
+  .catch(err => console.error("Erreur stats :", err));
 
     // Récupérer les documents récents
-    axios.get("http://localhost:5000/api/documents/", config)
-      .then(res => setRecentDocuments(res.data.slice(0, 5)))
-      .catch(err => console.error("Erreur documents :", err)); 
+    // Pour les documents récents :
+axios.get(`http://localhost:5000/api/documents/${currentUser.role === 'admin' ? '' : 'mes-documents'}`, config)
+  .then(res => setRecentDocuments(res.data.slice(0, 5)))
+  .catch(err => console.error("Erreur documents :", err));
+
+// Pour les workflows :
+axios.get(`http://localhost:5000/api/workflows/${currentUser.role === 'admin' ? '' : 'mes-workflows'}`, config)
+  .then(res => {
+    const data = currentUser.role === 'admin' ? 
+      res.data : 
+      res.data.filter(workflow => workflow.created_by === currentUser.id);
+    setLateWorkflows(data.slice(0, 5));
+  })
+  .catch(err => console.error("Erreur workflows :", err));
 
     // Récupérer les tâches assignées
-    axios.get("http://localhost:5000/api/tasks/mes-taches", config)
-      .then(res => {
-        const upcoming = res.data.filter(task => {
-          const ids = Array.isArray(task.assigned_to) ? task.assigned_to : task.assigned_to?.replace(/[{}]/g, '').split(',').map(Number);
-          return ids?.includes(currentUser.id) && task.status !== "completed";
-        }).sort((a, b) => new Date(a.due_date) - new Date(b.due_date)).slice(0, 5);
-        setAssignedTasks(upcoming);
-      }).catch(err => console.error("Erreur tâches :", err));
-
-    // Récupérer les workflows en retard
-    axios.get("http://localhost:5000/api/tasks/", config)
-      .then(res => {
-        const now = new Date();
-        const late = res.data.filter(task => task.created_by === currentUser.id && task.status !== "completed" && new Date(task.due_date) < now).slice(0, 5);
-        setLateWorkflows(late);
-      }).catch(err => console.error("Erreur workflows :", err));
-
+  axios.get("http://localhost:5000/api/tasks/mes-taches", config)
+    .then(res => {
+      const tasks = res.data.filter(task => {
+        const ids = Array.isArray(task.assigned_to) 
+          ? task.assigned_to 
+          : (task.assigned_to?.replace(/[{}]/g, '').split(',').map(Number) || []);
+        return ids.includes(currentUser.id);
+      });
+      
+      setAllTasks(tasks); // Pour le graphique
+      
+      // Filtre pour les tâches non terminées (affichage liste)
+      const pendingTasks = tasks.filter(task => task.status !== "completed");
+      setAssignedTasks(pendingTasks.slice(0, 5));
+    });
     // Récupérer les notifications
     axios.get(`http://localhost:5000/api/notifications/${currentUser.id}`, config)
-      .then(res => {
-        const formattedNotifications = res.data.slice(0, 5).map(notification => ({
-          ...notification,
-          message: notification.message,
-        }));
-        setNotifications(formattedNotifications);
-      })
+  .then(res => {
+    const formattedNotifications = res.data.slice(0, 5).map(notification => ({
+      ...notification,
+      message: notification.message,
+    }));
+    setNotifications(formattedNotifications);
+  })
       .catch(err => console.error("Erreur notifications :", err));
 
   }, [currentUser, token]);
 
-  // Initialiser les graphiques
-  useEffect(() => {
-    if (assignedTasks.length > 0) {
-      initTaskChart();
-    }
 
-    // Nettoyage lors du démontage du composant
-    return () => {
-      const ctx = document.getElementById('taskChart');
-      if (ctx && ctx.chart) {
-        ctx.chart.destroy();
-      }
-    };
-  }, [assignedTasks]);
+useEffect(() => {
+  if (allTasks.length > 0) {
+    initTaskChart();
+  }
+}, [allTasks]); // Déclenché quand allTasks change
 
-  const initTaskChart = () => {
-    const ctx = document.getElementById('taskChart');
-    if (!ctx) return;
+const initEmptyChart = () => {
+  const ctx = document.getElementById('taskChart');
+  if (!ctx) return;
+  
+  if (ctx.chart) ctx.chart.destroy();
 
-    // Détruire le graphique existant s'il y en a un
-    if (ctx.chart) {
-      ctx.chart.destroy();
-    }
+  ctx.chart = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Aucune donnée'],
+      datasets: [{
+        data: [1],
+        backgroundColor: ['#f8f9fa'],
+      }]
+    },
+    options: chartOptions
+  });
+};
 
-    const statusCounts = assignedTasks.reduce((acc, task) => {
-      acc[task.status] = (acc[task.status] || 0) + 1;
-      return acc;
-    }, {});
+const initTaskChart = () => {
+  const ctx = document.getElementById('taskChart');
+  if (!ctx) return;
 
-    ctx.chart = new Chart(ctx, {
-      type: 'doughnut',
-      data: {
-        labels: Object.keys(statusCounts),
-        datasets: [{
-          data: Object.values(statusCounts),
-          backgroundColor: [
-            '#4e73df',
-            '#1cc88a',
-            '#36b9cc',
-            '#f6c23e',
-            '#e74a3b'
-          ],
-          hoverBackgroundColor: [
-            '#2e59d9',
-            '#17a673',
-            '#2c9faf',
-            '#dda20a',
-            '#be2617'
-          ],
-          hoverBorderColor: "rgba(234, 236, 244, 1)",
-        }],
-      },
-      options: {
-        maintainAspectRatio: false,
-        plugins: {
-          legend: {
-            position: 'bottom'
-          }
-        },
-        cutout: '70%',
-      },
-    });
+  if (ctx.chart) {
+    ctx.chart.destroy();
+  }
+
+  // Statuts avec couleurs
+  const statusConfig = {
+    'pending': { label: 'En attente', color: '#f6c23e' },
+    'in_progress': { label: 'En cours', color: '#36b9cc' },
+    'completed': { label: 'Terminé', color: '#1cc88a' },
+    'overdue': { label: 'En retard', color: '#e74a3b' }
   };
+
+  // Comptage
+  const statusCounts = allTasks.reduce((acc, task) => {
+    const statusKey = task.status.toLowerCase();
+    const status = statusConfig[statusKey] || { label: statusKey, color: '#4e73df' };
+    acc[status.label] = (acc[status.label] || 0) + 1;
+    return acc;
+  }, {});
+
+  // Préparation données
+  const chartData = {
+    labels: Object.keys(statusCounts),
+    datasets: [{
+      data: Object.values(statusCounts),
+      backgroundColor: Object.keys(statusCounts).map(label => 
+        Object.values(statusConfig).find(s => s.label === label)?.color || '#4e73df'
+      ),
+    }],
+  };
+
+  // Création graphique
+  ctx.chart = new Chart(ctx, {
+    type: 'doughnut',
+    data: chartData,
+    options: chartOptions
+  });
+};
+
+const chartOptions = {
+  maintainAspectRatio: false,
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: {
+        padding: 20,
+        font: {
+          size: 12
+        }
+      }
+    },
+    tooltip: {
+      callbacks: {
+        label: function(context) {
+          const label = context.label || '';
+          const value = context.raw || 0;
+          const total = context.dataset.data.reduce((a, b) => a + b, 0);
+          const percentage = Math.round((value / total) * 100);
+          return `${label}: ${value} (${percentage}%)`;
+        }
+      }
+    }
+  },
+  cutout: '70%',
+};
 
   return (
     <>
@@ -181,7 +242,7 @@ const Accueil = () => {
       <div className="container-fluid mt-4">
 
         {/* Cartes de statistiques */}
-        <div className="row mb-4">
+        <div className="row mb-3">
           <StatCard 
             title="Documents" 
             value={stats.documents} 
@@ -203,15 +264,16 @@ const Accueil = () => {
             color="info" 
             onClick={() => navigate("/mes-taches")}
           />
-          <StatCard 
-            title="Notifications" 
-            value={notifications.length} 
-            icon={faBell} 
-            color="warning" 
-            onClick={() => navigate("/notif")}
-          />
-        </div>
-
+  {currentUser?.role === 'admin' && (
+    <StatCard 
+      title="Utilisateurs" 
+      value={stats.users || 0} 
+      icon={faUsers} 
+      color="warning" 
+      onClick={() => navigate("/users")}
+    />
+  )}
+</div>
         {/* Graphique et cartes principales */}
         <div className="row">
           {/* Graphique */}
@@ -221,13 +283,13 @@ const Accueil = () => {
                 <h6 className="m-0 font-weight-bold text-primary">Répartition des tâches</h6>
               </div>
               <div className="card-body">
-                <div className="chart-pie pt-4 pb-2">
-                  <canvas id="taskChart" style={{height: '250px'}}></canvas>
-                </div>
-              </div>
+   <div className="chart-pie pt-4 pb-2">
+          <canvas id="taskChart" style={{ height: '250px' }}></canvas>
+        </div>
+</div>
             </div>
+             
           </div>
-
           {/* Cartes principales */}
           <div className="col-xl-8 col-lg-7">
             <div className="row">
@@ -268,14 +330,14 @@ const Accueil = () => {
           />
 
           <EnhancedCard
-            title="Notifications"
-            items={notifications}
-            onClick={() => navigate("/notif")}
-            type="notification"
-            icon={faBell}
-            color="#f6c23e"
-            emptyMessage="Aucune notification"
-          />
+  title="Notifications"
+  items={notifications}
+  onClick={() => navigate("/notif")}
+  type="notification"  // Ce prop active l'affichage spécifique
+  icon={faBell}
+  color="#f6c23e"
+  emptyMessage="Aucune notification"
+/>
         </div>
       </div>
     </>
@@ -335,17 +397,33 @@ const EnhancedCard = ({ title, items, onClick, type, icon, color, emptyMessage, 
                 className="list-group-item d-flex justify-content-between align-items-center px-0 py-2"
               >
                 <div>
-                  <strong>{item.name || item.title || item.message?.substring(0, 30)}</strong>
-                  {item.due_date && (
-                    <div className="text-muted small mt-1">
-                      <FontAwesomeIcon icon={faCalendarAlt} className="mr-1" />
-                      {new Date(item.due_date).toLocaleDateString()}
-                      {new Date(item.due_date) < new Date() && (
-                        <span className="badge badge-danger ml-2">
-                          <FontAwesomeIcon icon={faExclamationTriangle} /> En retard
-                        </span>
+                  {/* Affichage spécifique pour les notifications */}
+                  {type === 'notification' ? (
+                    <>
+                      <strong>{item.message}</strong>
+                      {item.created_at && (
+                        <div className="text-muted small mt-1">
+                          <FontAwesomeIcon icon={faCalendarAlt} className="mr-1" />
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </div>
                       )}
-                    </div>
+                    </>
+                  ) : (
+                    /* Affichage standard pour les autres types */
+                    <>
+                      <strong>{item.name || item.title || item.message?.substring(0, 30)}</strong>
+                      {item.due_date && (
+                        <div className="text-muted small mt-1">
+                          <FontAwesomeIcon icon={faCalendarAlt} className="mr-1" />
+                          {new Date(item.due_date).toLocaleDateString()}
+                          {new Date(item.due_date) < new Date() && (
+                            <span className="badge badge-danger ml-2">
+                              <FontAwesomeIcon icon={faExclamationTriangle} /> En retard
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
                 {isUrgent && (

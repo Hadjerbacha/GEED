@@ -354,47 +354,54 @@ router.post('/', auth, upload.single('file'), async (req, res) => {
   }
 });
 
+// Route pour 'mes-documents'
+router.get('/mes-documents', auth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM documents WHERE owner_id = $1 ORDER BY date DESC',
+      [req.user.id]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+//
 // 📈 Ajout des statistiques dans le backend
 router.get('/stats', auth, async (req, res) => {
-  try {
-    const [
-      userCountResult,
-      documentCountResult,
-      collectionCountResult,
-      taskCountResult,
-      workflowCountResult,
-      documentPerUserResult,
-      taskStatusResult
-    ] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM users'),
-      pool.query('SELECT COUNT(*) FROM documents'),
-      pool.query('SELECT COUNT(*) FROM collections'),
-      pool.query('SELECT COUNT(*) FROM tasks'),
-      pool.query('SELECT COUNT(*) FROM workflow'),
-      pool.query(`
-        SELECT u.id, u.name, u.prenom, COUNT(d.id) AS document_count
-        FROM users u
-        LEFT JOIN documents d ON u.id = d.owner_id
-        GROUP BY u.id
-        ORDER BY document_count DESC
-        LIMIT 5
-      `),
-      pool.query(`
-        SELECT status, COUNT(*) AS count
-        FROM tasks
-        GROUP BY status
-      `)
-    ]);
+  const userId = req.user.id;
+  const isAdmin = req.user.role === 'admin';
 
-    res.status(200).json({
-      totalUsers: parseInt(userCountResult.rows[0].count, 10),
-      totalDocuments: parseInt(documentCountResult.rows[0].count, 10),
-      totalCollections: parseInt(collectionCountResult.rows[0].count, 10),
-      totalTasks: parseInt(taskCountResult.rows[0].count, 10),
-      totalWorkflows: parseInt(workflowCountResult.rows[0].count, 10),
-      topDocumentOwners: documentPerUserResult.rows,
-      taskStatusDistribution: taskStatusResult.rows
-    });
+  try {
+    if (isAdmin) {
+      // Statistiques complètes pour l'admin
+      const [documents, workflows, tasks, users] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM documents'),
+        pool.query('SELECT COUNT(*) FROM workflow'),
+        pool.query('SELECT COUNT(*) FROM tasks'),
+        pool.query('SELECT COUNT(*) FROM users')
+      ]);
+
+      res.status(200).json({
+        totalDocuments: parseInt(documents.rows[0].count, 10),
+        totalWorkflows: parseInt(workflows.rows[0].count, 10),
+        totalTasks: parseInt(tasks.rows[0].count, 10),
+        totalUsers: parseInt(users.rows[0].count, 10)
+      });
+    } else {
+      // Statistiques spécifiques à l'utilisateur normal
+      const [userDocuments, userWorkflows, userTasks] = await Promise.all([
+        pool.query('SELECT COUNT(*) FROM documents WHERE owner_id = $1', [userId]),
+        pool.query('SELECT COUNT(*) FROM workflow WHERE created_by = $1', [userId]),
+        pool.query('SELECT COUNT(*) FROM tasks WHERE $1 = ANY(assigned_to)', [userId])
+      ]);
+
+      res.status(200).json({
+        userDocuments: parseInt(userDocuments.rows[0].count, 10),
+        userWorkflows: parseInt(userWorkflows.rows[0].count, 10),
+        userTasks: parseInt(userTasks.rows[0].count, 10)
+      });
+    }
   } catch (error) {
     console.error('Erreur récupération statistiques :', error);
     res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques' });
@@ -402,9 +409,6 @@ router.get('/stats', auth, async (req, res) => {
 });
 
 
-
-
-//
 router.post('/:id/share', auth, async (req, res) => {
   const { allowedUsers, access, newOwnerId } = req.body; // 🆕 on accepte un "newOwnerId" optionnel
   const { id } = req.params;

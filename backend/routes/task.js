@@ -54,6 +54,18 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la suppression du workflow' });
   }
 });
+// Route pour 'mes-workflows'
+router.get('/mes-workflows', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM workflow WHERE created_by = $1 ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.status(200).json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // 📄 Récupérer tous les workflows avec le nombre de tâches
 router.get('/', async (req, res) => {
@@ -989,6 +1001,7 @@ router.post("/:id/assign-tasks", authMiddleware, async (req, res) => {
     });
   }
 });
+
 
 
 module.exports = router;
