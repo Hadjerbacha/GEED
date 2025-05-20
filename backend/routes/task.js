@@ -54,6 +54,33 @@ router.delete('/:id', async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la suppression du workflow' });
   }
 });
+
+// Dans task.js
+router.get('/document/:documentId/versions', authMiddleware, async (req, res) => {
+  const { documentId } = req.params;
+  
+  try {
+    const result = await pool.query(`
+      SELECT 
+        w.*,
+        d.version as document_version,
+        COUNT(t.id) as task_count,
+        COUNT(t.id) FILTER (WHERE t.status = 'completed') as completed_tasks
+      FROM workflow w
+      JOIN documents d ON w.document_id = d.id
+      LEFT JOIN tasks t ON w.id = t.workflow_id
+      WHERE d.original_id = $1 OR d.id = $1
+      GROUP BY w.id, d.version
+      ORDER BY d.version DESC
+    `, [documentId]);
+    
+    res.json(result.rows);
+  } catch (err) {
+    console.error('Erreur récupération versions:', err);
+    res.status(500).json({ error: 'Erreur serveur' });
+  }
+});
+
 // Route pour 'mes-workflows'
 router.get('/mes-workflows', authMiddleware, async (req, res) => {
   try {
@@ -656,15 +683,29 @@ res.status(500).json({ error: 'Erreur serveur' });
 router.get('/document/:documentId', authMiddleware, async (req, res) => {
   const { documentId } = req.params;
   
-  // Validation simple
-  if (!documentId || isNaN(documentId)) {
-    return res.status(400).json({ message: 'ID de document invalide' });
-  }
-
   try {
-    const result = await pool.query(
-      'SELECT * FROM workflow WHERE document_id = $1 LIMIT 1', // Note: 'workflows' au pluriel?
+    // 1. D'abord vérifier le document lui-même
+    const docResult = await pool.query(
+      'SELECT id, original_id FROM documents WHERE id = $1',
       [documentId]
+    );
+    
+    if (docResult.rowCount === 0) {
+      return res.status(404).json({ message: 'Document non trouvé' });
+    }
+    
+    const doc = docResult.rows[0];
+    let workflowIdToCheck = doc.id;
+    
+    // 2. Si c'est une nouvelle version, vérifier le document original
+    if (doc.original_id) {
+      workflowIdToCheck = doc.original_id;
+    }
+    
+    // 3. Vérifier le workflow
+    const result = await pool.query(
+      'SELECT * FROM workflow WHERE document_id = $1 LIMIT 1',
+      [workflowIdToCheck]
     );
     
     if (result.rows.length > 0) {
@@ -679,7 +720,7 @@ router.get('/document/:documentId', authMiddleware, async (req, res) => {
     console.error('Erreur DB:', err);
     res.status(500).json({ 
       message: 'Erreur serveur',
-      error: err.message // Ajoutez ceci pour le débogage
+      error: err.message
     });
   }
 });

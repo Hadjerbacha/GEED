@@ -308,32 +308,42 @@ const Doc = () => {
 
 
 
-  const handleOpenConfirm = async (doc) => {
-    setModalDoc(doc);
-    setAutoWfName(`WF_${doc.name}`);
+const handleOpenConfirm = async (doc) => {
+  setModalDoc(doc);
+  setAutoWfName(`WF_${doc.name}`);
 
-    try {
+  try {
+    // Vérifier si c'est une nouvelle version (a un original_id)
+    if (doc.original_id) {
+      // Chercher le workflow existant pour le document original
       const res = await axios.get(
-        `http://localhost:5000/api/workflows/document/${doc.id}`,
+        `http://localhost:5000/api/workflows/document/${doc.original_id}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
-      setExistingWorkflow(res.data.exists ? res.data.workflow : null);
-      setShowConfirmModal(true);
-
-    } catch (err) {
-      console.error('Erreur vérification workflow:', err);
-
-      if (err.response?.status === 500) {
-        toast.error("Erreur serveur lors de la vérification des workflows");
-      } else {
-        toast.error("Erreur de connexion");
+      
+      if (res.data.exists) {
+        setExistingWorkflow(res.data.workflow);
+        setShowConfirmModal(true);
+        return;
       }
-
-      setExistingWorkflow(null);
-      setShowConfirmModal(true);
     }
-  };
+
+    // Si pas une nouvelle version ou pas de workflow existant, vérifier pour ce document
+    const res = await axios.get(
+      `http://localhost:5000/api/workflows/document/${doc.id}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    setExistingWorkflow(res.data.exists ? res.data.workflow : null);
+    setShowConfirmModal(true);
+
+  } catch (err) {
+    console.error('Erreur vérification workflow:', err);
+    toast.error(err.response?.data?.message || "Erreur de vérification");
+    setExistingWorkflow(null);
+    setShowConfirmModal(true);
+  }
+};
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -351,31 +361,40 @@ const Doc = () => {
     console.log('Form data:', formData);
   };
 
-  const handleConfirmCreate = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const todayISO = new Date().toISOString().slice(0, 10);
+ const handleConfirmCreate = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const todayISO = new Date().toISOString().slice(0, 10);
 
-      const res = await axios.post(
-        'http://localhost:5000/api/workflows',
-        {
-          documentId: modalDoc.id,
-          name: autoWfName,
-          status: 'pending',
-          template: modalDoc.category,
-          created_by: userId,
-          echeance: todayISO
-        },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success('Workflow créé !');
-      setShowConfirmModal(false);
-      navigate(`/workflowz/${res.data.id}`, { state: { document: modalDoc } });
-    } catch (err) {
-      console.error(err);
-      toast.error('Erreur lors de la création du workflow');
+    // Si c'est une nouvelle version et qu'un workflow existe déjà
+    if (modalDoc.original_id && existingWorkflow) {
+      // Naviguer vers le workflow existant
+      navigate(`/workflowz/${existingWorkflow.id}`, { state: { document: modalDoc } });
+      return;
     }
-  };
+
+    // Sinon, créer un nouveau workflow
+    const res = await axios.post(
+      'http://localhost:5000/api/workflows',
+      {
+        documentId: modalDoc.id,
+        name: autoWfName,
+        status: 'pending',
+        template: modalDoc.category,
+        created_by: userId,
+        echeance: todayISO
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    toast.success('Workflow créé !');
+    setShowConfirmModal(false);
+    navigate(`/workflowz/${res.data.id}`, { state: { document: modalDoc } });
+  } catch (err) {
+    console.error(err);
+    toast.error('Erreur lors de la création du workflow');
+  }
+};
 
   const checkWorkflowExists = async () => {
     const token = localStorage.getItem('token');
